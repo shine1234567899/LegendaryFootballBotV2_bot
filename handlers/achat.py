@@ -31,22 +31,15 @@ from database.models import StarPayment, User
 # cannot be credited twice.
 # ==========================================================
 
-PACK_STARS = 50
-
 PRODUCTS = {
-    "coins_50": {
-        "label": "60,000 Coins",
-        "description": "Get 60,000 Coins for 50 Telegram Stars.",
-        "coins": 60_000,
-        "gems": 0,
-    },
-    "gems_50": {
-        "label": "200 Gems",
-        "description": "Get 200 Gems for 50 Telegram Stars.",
-        "coins": 0,
-        "gems": 200,
-    },
+    "coins_50": {"label": "500,000 Coins", "description": "Get 500,000 Coins for 50 Telegram Stars.", "stars": 50, "coins": 500_000, "gems": 0},
+    "coins_100": {"label": "1,200,000 Coins", "description": "Get 1,200,000 Coins for 100 Telegram Stars.", "stars": 100, "coins": 1_200_000, "gems": 0},
+    "coins_200": {"label": "2,600,000 Coins", "description": "Get 2,600,000 Coins for 200 Telegram Stars.", "stars": 200, "coins": 2_600_000, "gems": 0},
+    "coins_500": {"label": "7,000,000 Coins", "description": "Get 7,000,000 Coins for 500 Telegram Stars.", "stars": 500, "coins": 7_000_000, "gems": 0},
+    "coins_1000": {"label": "16,000,000 Coins", "description": "Get 16,000,000 Coins for 1000 Telegram Stars.", "stars": 1000, "coins": 16_000_000, "gems": 0},
+    "gems_50": {"label": "200 Gems", "description": "Get 200 Gems for 50 Telegram Stars.", "stars": 50, "coins": 0, "gems": 200},
 }
+
 
 PAYLOAD_PREFIX = "lfb_achat:"
 
@@ -54,18 +47,12 @@ PAYLOAD_PREFIX = "lfb_achat:"
 def _shop_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
-            [
-                InlineKeyboardButton(
-                    "🪙 60,000 Coins — ⭐ 50",
-                    callback_data=f"{PAYLOAD_PREFIX}coins_50",
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    "💎 200 Gems — ⭐ 50",
-                    callback_data=f"{PAYLOAD_PREFIX}gems_50",
-                ),
-            ],
+            [InlineKeyboardButton("🪙 500,000 Coins — ⭐ 50", callback_data=f"{PAYLOAD_PREFIX}coins_50")],
+            [InlineKeyboardButton("🪙 1,200,000 Coins — ⭐ 100", callback_data=f"{PAYLOAD_PREFIX}coins_100")],
+            [InlineKeyboardButton("🪙 2,600,000 Coins — ⭐ 200", callback_data=f"{PAYLOAD_PREFIX}coins_200")],
+            [InlineKeyboardButton("🪙 7,000,000 Coins — ⭐ 500", callback_data=f"{PAYLOAD_PREFIX}coins_500")],
+            [InlineKeyboardButton("🪙 16,000,000 Coins — ⭐ 1000", callback_data=f"{PAYLOAD_PREFIX}coins_1000")],
+            [InlineKeyboardButton("💎 200 Gems — ⭐ 50", callback_data=f"{PAYLOAD_PREFIX}gems_50")],
         ]
     )
 
@@ -83,6 +70,19 @@ def _back_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def _shop_text() -> str:
+    return (
+        "🛒 𝐒𝐓𝐀𝐑𝐒 𝐒𝐇𝐎𝐏\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Choose what you want to buy:\n\n"
+        "🪙 500,000 Coins — ⭐ 50 Stars\n"
+        "🪙 1,200,000 Coins — ⭐ 100 Stars\n"
+        "🪙 2,600,000 Coins — ⭐ 200 Stars\n"
+        "🪙 7,000,000 Coins — ⭐ 500 Stars\n"
+        "🪙 16,000,000 Coins — ⭐ 1000 Stars\n"
+        "💎 200 Gems — ⭐ 50 Stars"
+    )
+
 async def achat(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -92,16 +92,7 @@ async def achat(
     if message is None:
         return
 
-    await message.reply_text(
-        (
-            "🛒 𝐒𝐓𝐀𝐑𝐒 𝐒𝐇𝐎𝐏\n"
-            "━━━━━━━━━━━━━━━━━━━━\n\n"
-            "Choose what you want to buy:\n\n"
-            "🪙 60,000 Coins — ⭐ 50 Stars\n"
-            "💎 200 Gems — ⭐ 50 Stars"
-        ),
-        reply_markup=_shop_keyboard(),
-    )
+    await message.reply_text(_shop_text(), reply_markup=_shop_keyboard())
 
 
 async def achat_callback(
@@ -121,16 +112,7 @@ async def achat_callback(
     action = str(query.data).split(":", 1)[1]
 
     if action == "back":
-        await query.edit_message_text(
-            (
-                "🛒 𝐒𝐓𝐀𝐑𝐒 𝐒𝐇𝐎𝐏\n"
-                "━━━━━━━━━━━━━━━━━━━━\n\n"
-                "Choose what you want to buy:\n\n"
-                "🪙 60,000 Coins — ⭐ 50 Stars\n"
-                "💎 200 Gems — ⭐ 50 Stars"
-            ),
-            reply_markup=_shop_keyboard(),
-        )
+        await query.edit_message_text(_shop_text(), reply_markup=_shop_keyboard())
         return
 
     product = PRODUCTS.get(action)
@@ -149,7 +131,7 @@ async def achat_callback(
             "⭐ 𝐓𝐄𝐋𝐄𝐆𝐑𝐀𝐌 𝐒𝐓𝐀𝐑𝐒\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             f"Product: {product['label']}\n"
-            f"Price: ⭐ {PACK_STARS} Stars\n\n"
+            f"Price: ⭐ {product['stars']} Stars\n\n"
             "Press the payment button below to continue."
         ),
         reply_markup=_back_keyboard(),
@@ -164,7 +146,7 @@ async def achat_callback(
         prices=[
             LabeledPrice(
                 label=product["label"],
-                amount=PACK_STARS,
+                amount=product["stars"],
             )
         ],
     )
@@ -215,7 +197,7 @@ async def precheckout_callback(
         )
         return
 
-    if query.currency != "XTR" or query.total_amount != PACK_STARS:
+    if query.currency != "XTR" or query.total_amount != product["stars"]:
         await query.answer(
             ok=False,
             error_message="Invalid Stars amount.",
@@ -266,7 +248,7 @@ async def successful_payment_callback(
     if (
         product is None
         or payment.currency != "XTR"
-        or payment.total_amount != PACK_STARS
+        or payment.total_amount != product["stars"]
     ):
         return
 
@@ -300,7 +282,7 @@ async def successful_payment_callback(
                 telegram_payment_charge_id=charge_id,
                 user_id=telegram_user.id,
                 product=product_id,
-                stars=PACK_STARS,
+                stars=product["stars"],
                 coins=product["coins"],
                 gems=product["gems"],
             )
@@ -317,7 +299,7 @@ async def successful_payment_callback(
         (
             "✅ 𝐏𝐀𝐘𝐌𝐄𝐍𝐓 𝐒𝐔𝐂𝐂𝐄𝐒𝐒𝐅𝐔𝐋\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
-            f"⭐ Stars spent: {PACK_STARS}\n"
+            f"⭐ Stars spent: {product['stars']}\n"
             f"📦 Received: {product['label']}\n\n"
             f"{balance_text}"
         )
@@ -331,7 +313,7 @@ achat_handler = CommandHandler(
 
 achat_callback_handler = CallbackQueryHandler(
     achat_callback,
-    pattern=r"^lfb_achat:(coins_50|gems_50|back)$",
+    pattern=r"^lfb_achat:(coins_50|coins_100|coins_200|coins_500|coins_1000|gems_50|gems_100|gems_200|gems_500|gems_1000|back)$",
 )
 
 precheckout_handler = PreCheckoutQueryHandler(
