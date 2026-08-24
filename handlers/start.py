@@ -11,7 +11,6 @@ from sqlalchemy import select, func
 
 from database.database import AsyncSessionLocal
 from database.models import User, Club, ClubPlayer, GameSetting
-from services.localization import get_text
 
 from music_manager import music_manager
 
@@ -65,7 +64,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 id=user_id,
                 username=telegram_user.username,
                 first_name=telegram_user.first_name,
-                language="en",
                 coins=0,
                 gems=0,
             )
@@ -105,8 +103,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             player_count = result.scalar_one()
 
-        language = user.language or "en"
-
     username = (
         telegram_user.first_name
         or telegram_user.username
@@ -141,10 +137,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 InlineKeyboardButton(
                     "📖 HELP",
                     callback_data="start_help",
-                ),
-                InlineKeyboardButton(
-                    "🌍 LANGUAGE",
-                    callback_data="start_language",
                 ),
             ],
         ])
@@ -225,10 +217,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "📖 HELP",
                 callback_data="start_help",
             ),
-            InlineKeyboardButton(
-                "🌍 LANGUAGE",
-                callback_data="start_language",
-            ),
         ],
     ])
 
@@ -286,16 +274,6 @@ async def start_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
         return
 
-    if action == "start_language":
-        try:
-            from handlers.language import language
-            await language(update, context)
-        except Exception as error:
-            await query.message.reply_text(
-                f"❌ Language menu error: {type(error).__name__}"
-            )
-        return
-
     if action == "start_myclub":
         try:
             from handlers.myclub import myclub
@@ -329,5 +307,5 @@ async def start_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 start_menu_callback_handler = CallbackQueryHandler(
     start_menu_callback,
-    pattern=r"^start_(myclub|squad|transfers|help|language)$",
+    pattern=r"^start_(myclub|squad|transfers|help)$",
 )

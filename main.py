@@ -15,7 +15,6 @@ from handlers.achat import (
     successful_payment_handler,
 )
 from handlers.sendplayer import sendplayer_handler
-from handlers.language import (language_handler, language_callback_handler)
 from handlers.quiz import quiz_handler, quiz_callback_handler
 from handlers.cup import cup_handler
 from handlers.calendar import calendar_handler
@@ -137,7 +136,6 @@ from handlers.daily import daily_handler
 from handlers.ref import ref_handler
 from handlers.sanction import sanction_handler
 from handlers.leagueids import leagueids_handler
-from services.localization import install_localization
 
 
 
@@ -202,7 +200,6 @@ async def post_init(
         BotCommand("news", "View football news"),
         BotCommand("calendar", "View the calendar"),
         BotCommand("annonce", "Send discour owner"),
-        BotCommand("language", "Change language"),
         BotCommand("help", "View help"),
     ]
 
@@ -224,7 +221,6 @@ async def post_init(
 # ==========================================================
 
 def main():
-    install_localization()
     application = (
         Application
         .builder()
@@ -412,10 +408,6 @@ def main():
 
     application.add_handler(quiz_handler)
     application.add_handler(quiz_callback_handler)
-
-
-    application.add_handler(language_handler)
-    application.add_handler(language_callback_handler)
 
 
     application.add_handler(sendplayer_handler)
