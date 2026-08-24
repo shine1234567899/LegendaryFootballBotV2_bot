@@ -19,9 +19,9 @@ IMAGE_FILE = (
     / "quiz.jpg"
 )
 
-QUIZ_REWARD = 20_000
+QUIZ_REWARD = 80_000
 TOTAL_QUESTIONS = 300
-QUIZ_TIME_LIMIT = 20
+QUIZ_TIME_LIMIT = 25
 
 QUIZ_LANG_KEY = "quiz_language:{user_id}"
 QUIZ_ACTIVE_KEY = "quiz_active:{user_id}"
