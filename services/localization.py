@@ -10,6 +10,7 @@ from sqlalchemy import select
 
 from database.database import AsyncSessionLocal
 from database.models import User
+from locales.catalog import TRANSLATIONS
 
 
 SUPPORTED_LANGUAGES = {
@@ -140,36 +141,22 @@ def _restore_tokens(
 
 
 @functools.lru_cache(maxsize=16384)
-def _load_translations(language: str) -> dict[str, str]:
-    """Load local translations only. No online translation service."""
-    if language == "en":
-        return {}
+def _translation_map(language: str) -> dict[str, str]:
+    values = dict(TRANSLATIONS.get(language, {}))
 
-    merged: dict[str, str] = {}
+    # Keep compatibility with the older, hand-translated French bank.
+    if language == "fr":
+        try:
+            from locales.fr import TRANSLATIONS as LEGACY_FR
+            values.update(LEGACY_FR)
+        except Exception:
+            pass
 
-    # Legacy per-language modules, e.g. locales/fr.py.
-    try:
-        module = __import__(
-            f"locales.{language}",
-            fromlist=["TRANSLATIONS"],
-        )
-        values = getattr(module, "TRANSLATIONS", {})
-        if isinstance(values, dict):
-            merged.update(values)
-    except Exception:
-        pass
-
-    # New catalog.py, when present.
-    try:
-        from locales.catalog import TRANSLATIONS
-        values = TRANSLATIONS.get(language, {})
-        if isinstance(values, dict):
-            # Prefer explicit catalog entries over an older fallback.
-            merged.update(values)
-    except Exception:
-        pass
-
-    return merged
+    return {
+        str(k): str(v)
+        for k, v in values.items()
+        if isinstance(k, str) and isinstance(v, str) and k != v
+    }
 
 
 @functools.lru_cache(maxsize=16384)
@@ -177,44 +164,31 @@ def _translate_sync(
     text: str,
     language: str,
 ) -> str:
-    """
-    Deterministic local localization.
-
-    - English stays unchanged.
-    - French uses the project's existing large locales/fr.py dictionary.
-    - Other languages use local dictionaries/catalog entries when present.
-    - There is NO runtime Google/DeepTranslator dependency.
-    """
-    if not isinstance(text, str) or not text.strip():
+    if language == "en" or not text.strip():
         return text
 
-    language = (
-        language.lower().strip().replace("_", "-").split("-", 1)[0]
-    )
-
-    if language == "en":
-        return text
-
-    translations = _load_translations(language)
-
+    translations = _translation_map(language)
     if not translations:
         return text
 
-    translated = text
+    # Exact match first.
+    exact = translations.get(text)
+    if exact is not None:
+        return exact
 
-    # Longest phrases first so a short key cannot partially rewrite a
-    # larger UI message.
+    # Then translate static phrases embedded in dynamic messages while
+    # preserving URLs, commands and placeholders.
+    protected, tokens = _protect_tokens(text)
+    result = protected
     for source, target in sorted(
         translations.items(),
-        key=lambda item: len(str(item[0])),
+        key=lambda item: len(item[0]),
         reverse=True,
     ):
-        if not isinstance(source, str) or not isinstance(target, str):
-            continue
-        if source in translated:
-            translated = translated.replace(source, target)
+        if source in result:
+            result = result.replace(source, target)
 
-    return translated
+    return _restore_tokens(result, tokens)
 
 
 async def translate_text(
@@ -250,18 +224,7 @@ async def translate_text(
 async def get_text(
     text: str,
     user_id: int | None = None,
-    language: str | None = None,
 ) -> str:
-    if language is not None:
-        normalized = (
-            language.lower().strip().replace("_", "-").split("-", 1)[0]
-        )
-        return await asyncio.to_thread(
-            _translate_sync,
-            text,
-            normalized,
-        )
-
     return await translate_text(
         text,
         user_id=user_id,
@@ -494,10 +457,6 @@ def install_localization():
     )
     original_callback_edit_caption = (
         CallbackQuery.edit_message_caption
-    )
-
-    original_callback_answer = (
-        CallbackQuery.answer
     )
 
     # Direct context.bot.edit_message_text() is used by the Friendly
@@ -876,41 +835,6 @@ def install_localization():
                 token
             )
 
-    async def callback_answer(
-        self,
-        text=None,
-        *args,
-        **kwargs,
-    ):
-        if _TRANSLATION_ACTIVE.get():
-            return await original_callback_answer(
-                self,
-                text=text,
-                *args,
-                **kwargs,
-            )
-
-        token = _TRANSLATION_ACTIVE.set(True)
-
-        try:
-            user_id = _CURRENT_USER_ID.get()
-
-            if isinstance(text, str):
-                text = await translate_text(
-                    text,
-                    user_id=user_id,
-                )
-                text = _safe_limit(text, 200)
-
-            return await original_callback_answer(
-                self,
-                text=text,
-                *args,
-                **kwargs,
-            )
-        finally:
-            _TRANSLATION_ACTIVE.reset(token)
-
     async def bot_edit_text(
         self,
         *args,
@@ -1079,10 +1003,6 @@ def install_localization():
     )
     CallbackQuery.edit_message_caption = (
         callback_edit_caption
-    )
-
-    CallbackQuery.answer = (
-        callback_answer
     )
 
     Bot.edit_message_text = (
