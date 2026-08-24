@@ -27,7 +27,6 @@ COMMAND_PAGES = [
             ("/myclub", "View your club"),
             ("/squad", "View your squad"),
             ("/createclub", "Create your club"),
-            ("/addplayer", "Add a player"),
             ("/profile", "View your profile"),
             ("/setinfo", "Change club information"),
             ("/language", "Change bot language"),
@@ -37,12 +36,10 @@ COMMAND_PAGES = [
         "🏟️ 𝐌𝐀𝐑𝐊𝐄𝐓 & 𝐏𝐋𝐀𝐘",
         [
             ("/transfermarket", "Open the transfer market"),
-            ("/refillmarket", "Refill the transfer market"),
             ("/lineup", "Manage your lineup"),
             ("/training", "Train your players"),
             ("/friendly", "Play a friendly match"),
             ("/matches", "View your matches"),
-            ("/sendplayer", "Send a player"),
         ],
     ),
     (
@@ -50,9 +47,6 @@ COMMAND_PAGES = [
         [
             ("/league", "View and join leagues"),
             ("/leagueids", "View league IDs"),
-            ("/createleague", "Create a league"),
-            ("/adddivision", "Add a division"),
-            ("/startleague", "Start league competition"),
             ("/stats", "View statistics"),
             ("/rankings", "View rankings"),
             ("/calendar", "View competition calendar"),
@@ -61,17 +55,13 @@ COMMAND_PAGES = [
     (
         "🌍 𝐄𝐔𝐑𝐎𝐏𝐄",
         [
-            ("/starteurope", "Start European competition"),
             ("/league_europe", "View European leagues"),
         ],
     ),
     (
         "🏆 𝐂𝐔𝐏",
         [
-            ("/cup", "View Cup information"),
-            ("/startcup", "Start the Cup"),
             ("/cupmatches", "View Cup matches"),
-            ("/cupnextround", "Generate the next Cup round"),
         ],
     ),
     (
@@ -81,7 +71,6 @@ COMMAND_PAGES = [
             ("/pay", "Send Coins or Gems"),
             ("/daily", "Claim daily reward"),
             ("/ref", "Referral system"),
-            ("/addcoins", "Add Coins"),
         ],
     ),
     (
@@ -95,6 +84,17 @@ COMMAND_PAGES = [
     (
         "🔒 𝐎𝐖𝐍𝐄𝐑 / 𝐀𝐃𝐌𝐈𝐍",
         [
+            ("/addplayer", "Add a player"),
+            ("/refillmarket", "Refill the transfer market"),
+            ("/createleague", "Create a league"),
+            ("/adddivision", "Add a division"),
+            ("/startleague", "Start league competition"),
+            ("/starteurope", "Start European competition"),
+            ("/cup", "View Cup information"),
+            ("/startcup", "Start the Cup"),
+            ("/cupnextround", "Generate the next Cup round"),
+            ("/addcoins", "Add Coins"),
+            ("/sendplayer", "Send a player"),
             ("/sanction", "Manage sanctions"),
             ("/annonce", "Send an announcement"),
         ],
@@ -138,6 +138,48 @@ GUIDE_PAGES = [
 ]
 
 
+MAX_HELP_CAPTION = 900
+
+
+def _build_command_pages():
+    pages = []
+
+    for title, commands in COMMAND_PAGES:
+        current = []
+
+        for command, description in commands:
+            candidate = current + [(command, description)]
+
+            preview = "\n".join(
+                [
+                    "📖 𝐋𝐄𝐆𝐄𝐍𝐃𝐀𝐑𝐘 𝐅𝐎𝐎𝐓𝐁𝐀𝐋𝐋 𝐁𝐎𝐓",
+                    "━━━━━━━━━━━━━━━━━━━━",
+                    "",
+                    title,
+                    "",
+                    *[
+                        f"▫️ {cmd} — {desc}"
+                        for cmd, desc in candidate
+                    ],
+                    "",
+                    "📄 Page 99/99",
+                ]
+            )
+
+            if len(preview) > MAX_HELP_CAPTION and current:
+                pages.append((title, current))
+                current = [(command, description)]
+            else:
+                current = candidate
+
+        if current:
+            pages.append((title, current))
+
+    return pages
+
+
+SAFE_COMMAND_PAGES = _build_command_pages()
+
 def _main_keyboard(page: int):
     rows = []
 
@@ -149,7 +191,7 @@ def _main_keyboard(page: int):
                 callback_data=f"help:page:{page - 1}",
             )
         )
-    if page < len(COMMAND_PAGES) - 1:
+    if page < len(SAFE_COMMAND_PAGES) - 1:
         nav.append(
             InlineKeyboardButton(
                 "NEXT ➡️",
@@ -215,7 +257,7 @@ def _guide_keyboard(page: int):
 
 
 def _commands_text(page: int):
-    title, commands = COMMAND_PAGES[page]
+    title, commands = SAFE_COMMAND_PAGES[page]
 
     lines = [
         "📖 𝐋𝐄𝐆𝐄𝐍𝐃𝐀𝐑𝐘 𝐅𝐎𝐎𝐓𝐁𝐀𝐋𝐋 𝐁𝐎𝐓",
@@ -226,14 +268,12 @@ def _commands_text(page: int):
     ]
 
     for command, description in commands:
-        lines.append(
-            f"▫️ {command} — {description}"
-        )
+        lines.append(f"▫️ {command} — {description}")
 
     lines.extend(
         [
             "",
-            f"📄 Page {page + 1}/{len(COMMAND_PAGES)}",
+            f"📄 Page {page + 1}/{len(SAFE_COMMAND_PAGES)}",
         ]
     )
 
@@ -261,10 +301,18 @@ async def help_command(
     if message is None:
         return
 
-    await message.reply_text(
-        _commands_text(0),
-        reply_markup=_main_keyboard(0),
-    )
+    if IMAGE_FILE.exists():
+        with IMAGE_FILE.open("rb") as photo:
+            await message.reply_photo(
+                photo=photo,
+                caption=_commands_text(0),
+                reply_markup=_main_keyboard(0),
+            )
+    else:
+        await message.reply_text(
+            _commands_text(0),
+            reply_markup=_main_keyboard(0),
+        )
 
 
 async def help_callback(
@@ -294,12 +342,12 @@ async def help_callback(
                 0,
                 min(
                     page,
-                    len(COMMAND_PAGES) - 1,
+                    len(SAFE_COMMAND_PAGES) - 1,
                 ),
             )
 
-            await query.message.edit_text(
-                _commands_text(page),
+            await query.message.edit_caption(
+                caption=_commands_text(page),
                 reply_markup=_main_keyboard(page),
             )
             return
@@ -314,8 +362,8 @@ async def help_callback(
                 ),
             )
 
-            await query.message.edit_text(
-                _guide_text(page),
+            await query.message.edit_caption(
+                caption=_guide_text(page),
                 reply_markup=_guide_keyboard(page),
             )
 
