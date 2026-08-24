@@ -87,3 +87,13 @@ def language_name(language: str) -> str:
 
 def available_languages() -> dict[str, str]:
     return dict(SUPPORTED_LANGUAGES)
+async def get_text(
+    text: str,
+    user_id: int | None = None,
+    language: str | None = None,
+) -> str:
+    return await translate_text(
+        text,
+        language=language,
+        user_id=user_id,
+    )
