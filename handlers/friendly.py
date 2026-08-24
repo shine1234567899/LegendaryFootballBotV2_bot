@@ -1,5 +1,4 @@
 import asyncio
-import os
 import time
 
 from telegram.error import TimedOut, RetryAfter, NetworkError, BadRequest
@@ -40,11 +39,6 @@ from match_engine.engine import (
     MatchEngine,
     MatchTeam,
 )
-
-from match_engine.live_renderer import (
-    LiveMatchRenderer,
-)
-
 from music_manager import music_manager
 
 
@@ -1852,16 +1846,6 @@ async def start_friendly_match(
     live_message_id,
 ):
 
-    os.makedirs(
-        "matches",
-        exist_ok=True,
-    )
-
-    output_path = (
-        f"matches/"
-        f"friendly_{match_id}.mp4"
-    )
-
     # ======================================================
     # ENGINE
     # ======================================================
@@ -2060,47 +2044,17 @@ async def start_friendly_match(
     )
 
     # ======================================================
-    # RENDERER
-    # ======================================================
-
-    renderer = LiveMatchRenderer(
-        engine=engine,
-        output_path=output_path,
-    )
-
-    # ======================================================
-    # RUN
+    # RUN MATCH — NO VIDEO / NO GRAPHICS
     # ======================================================
 
     result = None
 
     try:
-
-        renderer_task = asyncio.create_task(
-            renderer.run()
-        )
-
-        engine_task = asyncio.create_task(
-            engine.play_live()
-        )
-
-        done, pending_tasks = await asyncio.wait(
-            {
-                renderer_task,
-                engine_task,
-            },
-            return_when=asyncio.ALL_COMPLETED,
-        )
-
-        for task in done:
-
-            task_result = task.result()
-
-            if task is engine_task:
-                result = task_result
+        # The football engine runs normally and sends its events to
+        # telegram_event_worker. No renderer or MP4 generation is used.
+        result = await engine.play_live()
 
         if result is None:
-
             raise RuntimeError(
                 "Match engine finished without a result."
             )
@@ -2115,11 +2069,6 @@ async def start_friendly_match(
 
         try:
             engine.stop()
-        except Exception:
-            pass
-
-        try:
-            renderer.stop()
         except Exception:
             pass
 
@@ -2210,27 +2159,6 @@ async def start_friendly_match(
         context,
         chat_id,
     )
-
-    # ======================================================
-    # VIDEO
-    # ======================================================
-
-    # Video generation/rendering stays enabled for the match,
-    # but the bot DOES NOT send the MP4 to Telegram automatically.
-    # This avoids flooding the chat after every friendly.
-    if os.path.exists(output_path):
-        try:
-            print(
-                "🎥 Match video generated but sending is disabled:",
-                output_path,
-            )
-        except Exception:
-            pass
-    else:
-        print(
-            "ℹ️ No match video generated:",
-            output_path,
-        )
 
     # ======================================================
     # CLEANUP
