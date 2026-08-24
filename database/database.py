@@ -1,5 +1,5 @@
 from collections.abc import AsyncGenerator
-
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -12,45 +12,63 @@ from config import DATABASE_URL
 
 def get_async_database_url(url: str) -> str:
     """
-    Convertit une URL PostgreSQL classique en URL asyncpg.
+    Convertit une URL PostgreSQL classique en URL asyncpg
+    et retire les paramètres SSL incompatibles avec asyncpg.
     """
 
-    if url.startswith(
-        "postgresql+asyncpg://"
-    ):
-        return url
-
-    if url.startswith(
-        "postgresql://"
-    ):
-        return url.replace(
+    if url.startswith("postgresql://"):
+        url = url.replace(
             "postgresql://",
             "postgresql+asyncpg://",
             1,
         )
 
-    if url.startswith(
-        "postgres://"
-    ):
-        return url.replace(
+    elif url.startswith("postgres://"):
+        url = url.replace(
             "postgres://",
             "postgresql+asyncpg://",
             1,
         )
 
-    raise ValueError(
-        "DATABASE_URL must be a PostgreSQL connection URL."
+    elif not url.startswith("postgresql+asyncpg://"):
+        raise ValueError(
+            "DATABASE_URL must be a PostgreSQL connection URL."
+        )
+
+    # Retirer sslmode de l'URL.
+    # asyncpg recevra SSL via connect_args.
+    parts = urlsplit(url)
+
+    query = parse_qsl(
+        parts.query,
+        keep_blank_values=True,
     )
+
+    query = [
+        (key, value)
+        for key, value in query
+        if key.lower() != "sslmode"
+    ]
+
+    clean_url = urlunsplit(
+        (
+            parts.scheme,
+            parts.netloc,
+            parts.path,
+            urlencode(query),
+            parts.fragment,
+        )
+    )
+
+    return clean_url
 
 
 # ==========================================================
 # DATABASE URL
 # ==========================================================
 
-ASYNC_DATABASE_URL = (
-    get_async_database_url(
-        DATABASE_URL
-    )
+ASYNC_DATABASE_URL = get_async_database_url(
+    DATABASE_URL
 )
 
 
@@ -62,6 +80,9 @@ engine = create_async_engine(
     ASYNC_DATABASE_URL,
     echo=False,
     pool_pre_ping=True,
+    connect_args={
+        "ssl": True,
+    },
 )
 
 
@@ -80,13 +101,11 @@ AsyncSessionLocal = async_sessionmaker(
 # SESSION DEPENDENCY
 # ==========================================================
 
-async def get_session()-> AsyncGenerator[
+async def get_session() -> AsyncGenerator[
     AsyncSession,
     None,
 ]:
-
- async with AsyncSessionLocal() as session:
-
+    async with AsyncSessionLocal() as session:
         yield session
 
 
@@ -95,14 +114,13 @@ async def get_session()-> AsyncGenerator[
 # ==========================================================
 
 async def init_database() -> None:
-
-    # Import ici pour éviter les problèmes
-    # de circular import.
+    """
+    Initialise toutes les tables SQLAlchemy.
+    """
 
     from database.models import Base
 
     async with engine.begin() as connection:
-
         await connection.run_sync(
             Base.metadata.create_all
         )
@@ -113,5 +131,4 @@ async def init_database() -> None:
 # ==========================================================
 
 async def close_database() -> None:
-
     await engine.dispose()
