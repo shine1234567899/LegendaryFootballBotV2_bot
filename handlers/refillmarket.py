@@ -1,4 +1,6 @@
 import random
+import csv
+from pathlib import Path
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -12,6 +14,10 @@ from database.models import Player, TransferListing
 
 
 MARKET_SIZE = 5
+TARGET_TRANSFER_PLAYERS = 500
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+CSV_FILE = BASE_DIR / "data" / "fc26_players.csv"
 
 
 async def refill_market(
@@ -39,15 +45,76 @@ async def refill_market(
 
         listed_ids = set(listed_result.scalars().all())
 
-        # Joueurs éligibles :
-        # - tous les joueurs présents dans la table Player
-        #   (y compris ceux importés depuis le CSV)
-        # - OVR >= 78
-        # - pas déjà disponibles sur le marché
-        #
-        # IMPORTANT :
-        # Les joueurs importés depuis le CSV peuvent avoir
-        # starter_pool=True. On ne doit donc PAS les exclure ici.
+        # --------------------------------------------------
+        # Ensure CSV players exist in Player
+        # --------------------------------------------------
+        # Existing Player rows are NEVER deleted or modified.
+        # New CSV rows are inserted only when their name does
+        # not already exist, preventing duplicate players.
+
+        if CSV_FILE.exists():
+            csv_result = await session.execute(
+                select(Player.name)
+            )
+            existing_names = {
+                (name or "").strip().casefold()
+                for name in csv_result.scalars().all()
+                if name
+            }
+
+            try:
+                with open(
+                    CSV_FILE,
+                    "r",
+                    encoding="utf-8-sig",
+                    newline="",
+                ) as file:
+                    rows = csv.DictReader(file)
+
+                    for row in rows:
+                        name = (row.get("name") or "").strip()
+
+                        if not name or name.casefold() in existing_names:
+                            continue
+
+                        try:
+                            country = (row.get("country") or "").strip()
+                            position = (row.get("position") or "").strip()
+                            age = int(row["age"])
+                            overall = int(row["overall"])
+                            potential = int(row["potential"])
+                            value = int(row["value"])
+                        except (KeyError, ValueError, TypeError):
+                            continue
+
+                        session.add(
+                            Player(
+                                name=name,
+                                country=country,
+                                position=position,
+                                age=age,
+                                overall=overall,
+                                potential=potential,
+                                value=value,
+                                image_file_id=None,
+                                starter_pool=False,
+                            )
+                        )
+
+                        existing_names.add(name.casefold())
+
+                await session.flush()
+
+            except (OSError, csv.Error):
+                # If the CSV cannot be read, continue with players
+                # already present in the database.
+                pass
+
+        # --------------------------------------------------
+        # Eligible players
+        # --------------------------------------------------
+        # Includes players imported from CSV.
+        # OVR >= 78 and not already listed as available.
         if listed_ids:
             result = await session.execute(
                 select(Player).where(

@@ -1,13 +1,19 @@
 import asyncio
+from urllib.parse import urlsplit
+
 from sqlalchemy import select, func
 
-from database.database import AsyncSessionLocal
+from config import DATABASE_URL
+from database.database import AsyncSessionLocal, ASYNC_DATABASE_URL
 from database.models import Player
 
 
 async def main():
-    async with AsyncSessionLocal() as session:
+    print("DATABASE HOST :", urlsplit(DATABASE_URL).hostname)
+    print("ASYNC HOST    :", urlsplit(ASYNC_DATABASE_URL).hostname)
+    print()
 
+    async with AsyncSessionLocal() as session:
         total = await session.scalar(
             select(func.count(Player.id))
         )
@@ -20,12 +26,9 @@ async def main():
             .limit(20)
         )
 
-        players = result.scalars().all()
-
-        for p in players:
+        for p in result.scalars().all():
             print(
-                f"{p.id} | "
-                f"{p.name} | "
+                f"{p.id} | {p.name} | "
                 f"OVR={p.overall} | "
                 f"starter_pool={p.starter_pool}"
             )
