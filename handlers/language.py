@@ -37,31 +37,18 @@ LANGUAGES = {
 }
 
 
-def _language_key(user_id: int) -> str:
-    return f"user_language:{user_id}"
-
-
 async def _get_language(
     session,
     user_id: int,
 ) -> str:
-    result = await session.execute(
-        select(GameSetting).where(
-            GameSetting.key
-            == _language_key(user_id)
-        )
-    )
+    user = await session.get(User, user_id)
 
-    setting = result.scalar_one_or_none()
-
-    if setting is None:
+    if user is None:
         return "en"
 
-    return (
-        setting.value
-        if setting.value in LANGUAGES
-        else "en"
-    )
+    value = getattr(user, "language", None)
+
+    return value if value in LANGUAGES else "en"
 
 
 async def _save_language(
@@ -69,25 +56,15 @@ async def _save_language(
     user_id: int,
     language: str,
 ):
-    result = await session.execute(
-        select(GameSetting).where(
-            GameSetting.key
-            == _language_key(user_id)
-        )
-    )
+    user = await session.get(User, user_id)
 
-    setting = result.scalar_one_or_none()
+    if user is None:
+        return False
 
-    if setting is None:
-        session.add(
-            GameSetting(
-                key=_language_key(user_id),
-                value=language,
-                description="Language selected by the user.",
-            )
-        )
-    else:
-        setting.value = language
+    user.language = language
+    await session.flush()
+
+    return True
 
 
 def _language_keyboard():

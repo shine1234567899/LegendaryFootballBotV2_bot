@@ -38,6 +38,7 @@ from config import BOT_TOKEN
 
 from handlers.start import (
     start,
+    start_menu_callback_handler,
 )
 
 from handlers.transfermarket import (
@@ -109,7 +110,9 @@ from handlers.profile import (
 from handlers.pay import (
     pay_handler,
     pay_callback_handler,
+    pay_amount_handler,
 )
+from handlers.balance import balance_handler
 from handlers.rankings import (
     rankings_handler,
     rankings_callback_handler,
@@ -158,7 +161,7 @@ async def post_init(
         BotCommand("squad", "View your squad"),
         BotCommand("createclub", "Create your club"),
         BotCommand("addplayer", "Add a player"),
-        BotCommand("transfermarket", "Open the transfer market"),
+        BotCommand("transfer", "Open the transfer market"),
         BotCommand("refillmarket", "Refill the transfer market"),
         BotCommand("lineup", "Manage your lineup"),
         BotCommand("training", "Train your players"),
@@ -177,6 +180,7 @@ async def post_init(
         BotCommand("cupnextround", "Start the next Cup round"),
         BotCommand("quiz", "Play the football quiz"),
         BotCommand("profile", "View your profile"),
+        BotCommand("balance", "View your balance"),
         BotCommand("stats", "View your statistics"),
         BotCommand("rankings", "View rankings"),
         BotCommand("daily", "Claim your daily reward"),
@@ -233,6 +237,11 @@ def main():
             "start",
             start,
         )
+    )
+
+    # START MENU BUTTONS
+    application.add_handler(
+        start_menu_callback_handler
     )
 
     application.add_handler(
@@ -360,6 +369,8 @@ def main():
     application.add_handler(profile_callback_handler)
     application.add_handler(pay_handler)
     application.add_handler(pay_callback_handler)
+    application.add_handler(pay_amount_handler)
+    application.add_handler(balance_handler)
 
     application.add_handler(rankings_handler)
     application.add_handler(rankings_callback_handler)

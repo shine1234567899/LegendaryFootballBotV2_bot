@@ -6,7 +6,7 @@ from telegram import (
     InputFile,
     Update,
 )
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes, CallbackQueryHandler
 from sqlalchemy import select, func
 
 from database.database import AsyncSessionLocal
@@ -255,3 +255,79 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context,
         update.effective_chat.id,
     )
+
+# =========================================================
+# START MENU BUTTONS
+# =========================================================
+
+async def start_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+
+    if query is None or not query.data:
+        return
+
+    try:
+        await query.answer()
+    except Exception:
+        pass
+
+    action = str(query.data)
+
+    if action == "start_help":
+        # Reuse the real help callback/handler through its callback function
+        try:
+            from handlers.help import help as help_callback
+            await help_callback(update, context)
+        except Exception:
+            # Fallback: keep the button functional even if the help module
+            # exposes only its handler.
+            await query.message.reply_text(
+                "📖 Use /help to open the complete guide."
+            )
+        return
+
+    if action == "start_language":
+        try:
+            from handlers.language import language
+            await language(update, context)
+        except Exception as error:
+            await query.message.reply_text(
+                f"❌ Language menu error: {type(error).__name__}"
+            )
+        return
+
+    if action == "start_myclub":
+        try:
+            from handlers.myclub import myclub
+            await myclub(update, context)
+        except Exception as error:
+            await query.message.reply_text(
+                f"❌ My Club error: {type(error).__name__}"
+            )
+        return
+
+    if action == "start_squad":
+        try:
+            from handlers.squad import squad
+            await squad(update, context)
+        except Exception as error:
+            await query.message.reply_text(
+                f"❌ Squad error: {type(error).__name__}"
+            )
+        return
+
+    if action == "start_transfers":
+        try:
+            from handlers.transfermarket import transfermarket
+            await transfermarket(update, context)
+        except Exception as error:
+            await query.message.reply_text(
+                f"❌ Transfer Market error: {type(error).__name__}"
+            )
+        return
+
+
+start_menu_callback_handler = CallbackQueryHandler(
+    start_menu_callback,
+    pattern=r"^start_(myclub|squad|transfers|help|language)$",
+)

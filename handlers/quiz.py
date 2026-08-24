@@ -3238,26 +3238,59 @@ async def _get_quiz_deadline(session, user_id: int):
 
 
 def _translate_french_sync(text: str) -> str:
+    """
+    Translate English quiz content to French.
+
+    The previous version silently returned the English text whenever the
+    translator failed. That made the French button appear to do nothing.
+    We now use two translation backends and only fall back to the original
+    text as a last resort, while logging the real error.
+    """
     if not text:
         return text
 
+    # Backend 1: GoogleTranslator
     try:
         from deep_translator import GoogleTranslator
 
         translated = GoogleTranslator(
-            source="auto",
+            source="en",
             target="fr",
         ).translate(text)
 
-        return translated or text
+        if translated and translated.strip() and translated.strip() != text.strip():
+            return translated.strip()
 
     except Exception as error:
         print(
-            "⚠️ QUIZ FRENCH TRANSLATION ERROR:",
+            "⚠️ QUIZ GOOGLE FRENCH TRANSLATION ERROR:",
             type(error).__name__,
             error,
         )
-        return text
+
+    # Backend 2: MyMemoryTranslator
+    try:
+        from deep_translator import MyMemoryTranslator
+
+        translated = MyMemoryTranslator(
+            source="en",
+            target="fr",
+        ).translate(text)
+
+        if translated and translated.strip() and translated.strip() != text.strip():
+            return translated.strip()
+
+    except Exception as error:
+        print(
+            "⚠️ QUIZ MYMEMORY FRENCH TRANSLATION ERROR:",
+            type(error).__name__,
+            error,
+        )
+
+    # Keep the bot alive if both external services are unavailable.
+    # The error is logged so it can be diagnosed instead of being hidden.
+    print("⚠️ QUIZ: French translation unavailable; keeping source text.")
+    return text
 
 
 async def _french(text: str) -> str:
