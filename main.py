@@ -179,6 +179,7 @@ async def post_init(
         BotCommand("createleague", "Create a league"),
         BotCommand("adddivision", "Add a division"),
         BotCommand("startleague", "Start a league"),
+        BotCommand("achat", "Buy coins and Gems"),
         BotCommand("starteurope", "Start European competition"),
         BotCommand("leagueeurope", "Open European leagues"),
         BotCommand("startcup", "Start the Cup"),
