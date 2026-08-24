@@ -32,12 +32,19 @@ from database.models import StarPayment, User
 # ==========================================================
 
 PRODUCTS = {
-    "coins_50": {"label": "500,000 Coins", "description": "Get 500,000 Coins for 50 Telegram Stars.", "stars": 50, "coins": 500_000, "gems": 0},
-    "coins_100": {"label": "1,200,000 Coins", "description": "Get 1,200,000 Coins for 100 Telegram Stars.", "stars": 100, "coins": 1_200_000, "gems": 0},
-    "coins_200": {"label": "2,600,000 Coins", "description": "Get 2,600,000 Coins for 200 Telegram Stars.", "stars": 200, "coins": 2_600_000, "gems": 0},
-    "coins_500": {"label": "7,000,000 Coins", "description": "Get 7,000,000 Coins for 500 Telegram Stars.", "stars": 500, "coins": 7_000_000, "gems": 0},
-    "coins_1000": {"label": "16,000,000 Coins", "description": "Get 16,000,000 Coins for 1000 Telegram Stars.", "stars": 1000, "coins": 16_000_000, "gems": 0},
+    # COINS
+    "coins_50": {"label": "5,000,000 Coins", "description": "Get 5,000,000 Coins for 50 Telegram Stars.", "stars": 50, "coins": 5_000_000, "gems": 0},
+    "coins_100": {"label": "10,200,000 Coins", "description": "Get 10,200,000 Coins for 100 Telegram Stars.", "stars": 100, "coins": 10_200_000, "gems": 0},
+    "coins_200": {"label": "20,600,000 Coins", "description": "Get 20,600,000 Coins for 200 Telegram Stars.", "stars": 200, "coins": 20_600_000, "gems": 0},
+    "coins_500": {"label": "70,000,000 Coins", "description": "Get 70,000,000 Coins for 500 Telegram Stars.", "stars": 500, "coins": 70_000_000, "gems": 0},
+    "coins_1000": {"label": "160,000,000 Coins", "description": "Get 160,000,000 Coins for 1000 Telegram Stars.", "stars": 1000, "coins": 160_000_000, "gems": 0},
+
+    # GEMS
     "gems_50": {"label": "200 Gems", "description": "Get 200 Gems for 50 Telegram Stars.", "stars": 50, "coins": 0, "gems": 200},
+    "gems_100": {"label": "450 Gems", "description": "Get 450 Gems for 100 Telegram Stars.", "stars": 100, "coins": 0, "gems": 450},
+    "gems_200": {"label": "1,000 Gems", "description": "Get 1,000 Gems for 200 Telegram Stars.", "stars": 200, "coins": 0, "gems": 1_000},
+    "gems_500": {"label": "2,750 Gems", "description": "Get 2,750 Gems for 500 Telegram Stars.", "stars": 500, "coins": 0, "gems": 2_750},
+    "gems_1000": {"label": "6,000 Gems", "description": "Get 6,000 Gems for 1000 Telegram Stars.", "stars": 1000, "coins": 0, "gems": 6_000},
 }
 
 
@@ -47,12 +54,16 @@ PAYLOAD_PREFIX = "lfb_achat:"
 def _shop_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("🪙 500,000 Coins — ⭐ 50", callback_data=f"{PAYLOAD_PREFIX}coins_50")],
-            [InlineKeyboardButton("🪙 1,200,000 Coins — ⭐ 100", callback_data=f"{PAYLOAD_PREFIX}coins_100")],
-            [InlineKeyboardButton("🪙 2,600,000 Coins — ⭐ 200", callback_data=f"{PAYLOAD_PREFIX}coins_200")],
-            [InlineKeyboardButton("🪙 7,000,000 Coins — ⭐ 500", callback_data=f"{PAYLOAD_PREFIX}coins_500")],
-            [InlineKeyboardButton("🪙 16,000,000 Coins — ⭐ 1000", callback_data=f"{PAYLOAD_PREFIX}coins_1000")],
+            [InlineKeyboardButton("🪙 5,000,000 Coins — ⭐ 50", callback_data=f"{PAYLOAD_PREFIX}coins_50")],
+            [InlineKeyboardButton("🪙 10,200,000 Coins — ⭐ 100", callback_data=f"{PAYLOAD_PREFIX}coins_100")],
+            [InlineKeyboardButton("🪙 20,600,000 Coins — ⭐ 200", callback_data=f"{PAYLOAD_PREFIX}coins_200")],
+            [InlineKeyboardButton("🪙 70,000,000 Coins — ⭐ 500", callback_data=f"{PAYLOAD_PREFIX}coins_500")],
+            [InlineKeyboardButton("🪙 160,000,000 Coins — ⭐ 1000", callback_data=f"{PAYLOAD_PREFIX}coins_1000")],
             [InlineKeyboardButton("💎 200 Gems — ⭐ 50", callback_data=f"{PAYLOAD_PREFIX}gems_50")],
+            [InlineKeyboardButton("💎 450 Gems — ⭐ 100", callback_data=f"{PAYLOAD_PREFIX}gems_100")],
+            [InlineKeyboardButton("💎 1,000 Gems — ⭐ 200", callback_data=f"{PAYLOAD_PREFIX}gems_200")],
+            [InlineKeyboardButton("💎 2,750 Gems — ⭐ 500", callback_data=f"{PAYLOAD_PREFIX}gems_500")],
+            [InlineKeyboardButton("💎 6,000 Gems — ⭐ 1000", callback_data=f"{PAYLOAD_PREFIX}gems_1000")],
         ]
     )
 
@@ -75,12 +86,16 @@ def _shop_text() -> str:
         "🛒 𝐒𝐓𝐀𝐑𝐒 𝐒𝐇𝐎𝐏\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         "Choose what you want to buy:\n\n"
-        "🪙 500,000 Coins — ⭐ 50 Stars\n"
-        "🪙 1,200,000 Coins — ⭐ 100 Stars\n"
-        "🪙 2,600,000 Coins — ⭐ 200 Stars\n"
-        "🪙 7,000,000 Coins — ⭐ 500 Stars\n"
-        "🪙 16,000,000 Coins — ⭐ 1000 Stars\n"
-        "💎 200 Gems — ⭐ 50 Stars"
+        "🪙 5,000,000 Coins — ⭐ 50 Stars\n"
+        "🪙 10,200,000 Coins — ⭐ 100 Stars\n"
+        "🪙 20,600,000 Coins — ⭐ 200 Stars\n"
+        "🪙 70,000,000 Coins — ⭐ 500 Stars\n"
+        "🪙 160,000,000 Coins — ⭐ 1000 Stars\n"
+        "💎 200 Gems — ⭐ 50 Stars\n"
+        "💎 450 Gems — ⭐ 100 Stars\n"
+        "💎 1,000 Gems — ⭐ 200 Stars\n"
+        "💎 2,750 Gems — ⭐ 500 Stars\n"
+        "💎 6,000 Gems — ⭐ 1000 Stars"
     )
 
 async def achat(
