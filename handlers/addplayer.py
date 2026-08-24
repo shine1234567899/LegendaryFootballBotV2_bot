@@ -1,6 +1,7 @@
 from telegram import Update,InlineKeyboardButton,InlineKeyboardMarkup
 from telegram.ext import (
     ConversationHandler,
+    CommandHandler,
     MessageHandler,
     ContextTypes,
     filters,
@@ -356,12 +357,12 @@ f"{player.value:,}\n\n"
 
 
 addplayer_handler = ConversationHandler(
-    entry_points=[
-        MessageHandler(
-            filters.Regex(r"^/addplayer$"),
-            addplayer_start,
-        )
-    ],
+   entry_points=[
+    CommandHandler(
+        "addplayer",
+        addplayer_start,
+    )
+],
     states={
         NAME: [
             MessageHandler(
