@@ -97,3 +97,10 @@ async def get_text(
         language=language,
         user_id=user_id,
     )
+def install_localization(application=None):
+    """
+    Compatibility hook for the existing main.py.
+    The current localization system does not need
+    external translation installation.
+    """
+    return application
