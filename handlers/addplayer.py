@@ -315,16 +315,20 @@ async def save_player(
         session.add(player)
         await session.commit()
         await session.refresh(player)
-    listing = TransferListing(
-        player_id=player.id,
-        price=player.value,
-        currency=data["currency"],
-        status="available",
-        listed_at=datetime.now(timezone.utc),
-)
 
-    session.add(listing)
-    await session.commit()
+        # Create the transfer-market listing with the same active session.
+        # The previous version tried to use `session` after the async
+        # session context had already been closed.
+        listing = TransferListing(
+            player_id=player.id,
+            price=player.value,
+            currency=data["currency"],
+            status="available",
+            listed_at=datetime.now(timezone.utc),
+        )
+
+        session.add(listing)
+        await session.commit()
 
     context.user_data.pop("addplayer", None)
 
