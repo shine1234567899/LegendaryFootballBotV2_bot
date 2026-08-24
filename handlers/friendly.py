@@ -42,6 +42,74 @@ from match_engine.engine import (
 from music_manager import music_manager
 
 
+# ==========================================================
+# FRIENDLY COIN REWARDS — ADDITIVE ONLY
+# ==========================================================
+
+FRIENDLY_REWARDS = {
+    "WIN": 80_000,
+    "DRAW": 50_000,
+    "DEFEAT": 20_000,
+}
+
+async def _give_friendly_rewards(
+    home_user_id: int | None,
+    away_user_id: int | None,
+    home_score: int,
+    away_score: int,
+    match_id: str,
+):
+    """
+    Adds the requested reward to the two managers' existing coins.
+    Nothing else in the friendly system is changed.
+    """
+    if home_user_id is None or away_user_id is None:
+        print(f"⚠️ FRIENDLY REWARD SKIPPED [{match_id}]: missing manager IDs")
+        return
+
+    if home_score > away_score:
+        home_reward = FRIENDLY_REWARDS["WIN"]
+        away_reward = FRIENDLY_REWARDS["DEFEAT"]
+        home_label = "WIN"
+        away_label = "DEFEAT"
+    elif away_score > home_score:
+        home_reward = FRIENDLY_REWARDS["DEFEAT"]
+        away_reward = FRIENDLY_REWARDS["WIN"]
+        home_label = "DEFEAT"
+        away_label = "WIN"
+    else:
+        home_reward = FRIENDLY_REWARDS["DRAW"]
+        away_reward = FRIENDLY_REWARDS["DRAW"]
+        home_label = "DRAW"
+        away_label = "DRAW"
+
+    try:
+        async with AsyncSessionLocal() as session:
+            home = await session.get(User, int(home_user_id))
+            away = await session.get(User, int(away_user_id))
+
+            if home is None or away is None:
+                print(f"⚠️ FRIENDLY REWARD SKIPPED [{match_id}]: user missing")
+                await session.rollback()
+                return
+
+            home.coins = int(home.coins or 0) + home_reward
+            away.coins = int(away.coins or 0) + away_reward
+
+            await session.commit()
+
+            print(
+                f"💰 FRIENDLY REWARDS [{match_id}] "
+                f"{home_user_id}={home_label}+{home_reward} | "
+                f"{away_user_id}={away_label}+{away_reward}"
+            )
+    except Exception as error:
+        print(
+            f"⚠️ FRIENDLY REWARD ERROR [{match_id}]: "
+            f"{type(error).__name__}: {error}"
+        )
+
+
 
 # ==========================================================
 # FRIENDLY END MUSIC
@@ -2150,6 +2218,18 @@ async def start_friendly_match(
             type(error).__name__,
             error,
         )
+
+    # ======================================================
+    # COIN REWARD — ADDITIVE ONLY
+    # ======================================================
+
+    await _give_friendly_rewards(
+        match_data.get("challenger_id"),
+        match_data.get("opponent_id"),
+        int(result.home_score),
+        int(result.away_score),
+        match_id,
+    )
 
     # ======================================================
     # END MUSIC

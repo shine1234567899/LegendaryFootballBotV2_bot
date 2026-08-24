@@ -136,6 +136,11 @@ from handlers.daily import daily_handler
 from handlers.ref import ref_handler
 from handlers.sanction import sanction_handler
 from handlers.leagueids import leagueids_handler
+from handlers.command import command_handler
+from handlers.commandrank import commandrank_handler
+from handlers.richlist import richlist_handler, richlist_callback_handler
+from handlers.command_tracker import command_tracker_handler
+from handlers.referral_processor import referral_start_middleware
 
 
 
@@ -201,6 +206,9 @@ async def post_init(
         BotCommand("calendar", "View the calendar"),
         BotCommand("annonce", "Send discour owner"),
         BotCommand("help", "View help"),
+        BotCommand("command", "View your daily command count"),
+        BotCommand("commandrank", "View command rankings"),
+        BotCommand("richlist", "View the richest managers"),
     ]
 
     try:
@@ -233,6 +241,23 @@ def main():
     # BASIC
     # ======================================================
 
+    # ======================================================
+    # GLOBAL TRACKING / REFERRALS
+    # ======================================================
+
+    application.add_handler(
+        command_tracker_handler,
+        group=-10,
+    )
+
+    application.add_handler(
+        CommandHandler(
+            "start",
+            referral_start_middleware,
+        ),
+        group=-9,
+    )
+
     application.add_handler(
         friendly_callback_router_handler
     )
@@ -241,7 +266,8 @@ def main():
         CommandHandler(
             "start",
             start,
-        )
+        ),
+        group=0,
     )
 
     # START MENU BUTTONS
@@ -393,6 +419,15 @@ def main():
     application.add_handler(ref_handler)
     application.add_handler(sanction_handler)
     application.add_handler(leagueids_handler)
+
+    # ======================================================
+    # COMMAND / RICHLIST
+    # ======================================================
+
+    application.add_handler(command_handler)
+    application.add_handler(commandrank_handler)
+    application.add_handler(richlist_handler)
+    application.add_handler(richlist_callback_handler)
 
     # ======================================================
     # START
