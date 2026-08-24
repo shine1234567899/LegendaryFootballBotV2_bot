@@ -40,18 +40,27 @@ async def refill_market(
         listed_ids = set(listed_result.scalars().all())
 
         # Joueurs éligibles :
-        # - pas dans le starter pool
+        # - tous les joueurs présents dans la table Player
+        #   (y compris ceux importés depuis le CSV)
         # - OVR >= 78
         # - pas déjà disponibles sur le marché
-        result = await session.execute(
-            select(Player).where(
-                Player.starter_pool.is_(False),
-                Player.overall >= 78,
-                ~Player.id.in_(listed_ids)
-                if listed_ids
-                else True,
+        #
+        # IMPORTANT :
+        # Les joueurs importés depuis le CSV peuvent avoir
+        # starter_pool=True. On ne doit donc PAS les exclure ici.
+        if listed_ids:
+            result = await session.execute(
+                select(Player).where(
+                    Player.overall >= 78,
+                    ~Player.id.in_(listed_ids),
+                )
             )
-        )
+        else:
+            result = await session.execute(
+                select(Player).where(
+                    Player.overall >= 78,
+                )
+            )
 
         candidates = result.scalars().all()
 
