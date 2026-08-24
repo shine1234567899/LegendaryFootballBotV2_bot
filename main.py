@@ -110,7 +110,7 @@ from handlers.profile import (
 from handlers.pay import (
     pay_handler,
     pay_callback_handler,
-    pay_amount_handler,
+    
 )
 from handlers.balance import balance_handler
 from handlers.rankings import (
@@ -369,7 +369,7 @@ def main():
     application.add_handler(profile_callback_handler)
     application.add_handler(pay_handler)
     application.add_handler(pay_callback_handler)
-    application.add_handler(pay_amount_handler)
+    
     application.add_handler(balance_handler)
 
     application.add_handler(rankings_handler)
