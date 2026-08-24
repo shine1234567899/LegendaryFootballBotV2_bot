@@ -1509,3 +1509,52 @@ class GameSetting(Base):
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
     )
+
+# ==========================================================
+# TELEGRAM STARS PAYMENTS
+# ==========================================================
+
+class StarPayment(Base):
+    __tablename__ = "star_payments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    telegram_payment_charge_id: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        unique=True,
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("users.id"),
+        nullable=False,
+    )
+
+    product: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+
+    stars: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    coins: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+        default=0,
+    )
+
+    gems: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+    )

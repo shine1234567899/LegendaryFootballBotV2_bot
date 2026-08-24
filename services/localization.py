@@ -10,6 +10,7 @@ from sqlalchemy import select
 
 from database.database import AsyncSessionLocal
 from database.models import User
+from locales.catalog import TRANSLATIONS
 
 
 SUPPORTED_LANGUAGES = {
@@ -139,48 +140,16 @@ def _restore_tokens(
     return text
 
 
-@functools.lru_cache(
-    maxsize=4096
-)
+@functools.lru_cache(maxsize=4096)
 def _translate_sync(
     text: str,
     language: str,
 ) -> str:
-    if (
-        language == "en"
-        or not text.strip()
-    ):
+    if language == "en" or not text.strip():
         return text
 
-    try:
-        from deep_translator import (
-            GoogleTranslator,
-        )
-
-        protected_text, protected = (
-            _protect_tokens(text)
-        )
-
-        translated = (
-            GoogleTranslator(
-                source="auto",
-                target=language,
-            ).translate(
-                protected_text
-            )
-        )
-
-        if not translated:
-            return text
-
-        return _restore_tokens(
-            translated,
-            protected,
-        )
-
-    except Exception:
-        # Translation failure must NEVER stop the bot.
-        return text
+    translated = TRANSLATIONS.get(language, {}).get(text)
+    return translated if translated else text
 
 
 async def translate_text(

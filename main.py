@@ -7,6 +7,13 @@ from telegram.ext import (
 from handlers.trade import trade_handler
 from handlers.pay import pay_handler
 from handlers.addcoins import addcoins_handler
+
+from handlers.achat import (
+    achat_handler,
+    achat_callback_handler,
+    precheckout_handler,
+    successful_payment_handler,
+)
 from handlers.sendplayer import sendplayer_handler
 from handlers.language import (language_handler, language_callback_handler)
 from handlers.quiz import quiz_handler, quiz_callback_handler
@@ -181,6 +188,7 @@ async def post_init(
         BotCommand("quiz", "Play the football quiz"),
         BotCommand("profile", "View your profile"),
         BotCommand("balance", "View your balance"),
+        BotCommand("achat", "Buy Coins or Gems with Telegram Stars"),
         BotCommand("stats", "View your statistics"),
         BotCommand("rankings", "View rankings"),
         BotCommand("daily", "Claim your daily reward"),
@@ -371,6 +379,11 @@ def main():
     application.add_handler(pay_callback_handler)
     
     application.add_handler(balance_handler)
+
+    application.add_handler(achat_handler)
+    application.add_handler(achat_callback_handler)
+    application.add_handler(precheckout_handler)
+    application.add_handler(successful_payment_handler)
 
     application.add_handler(rankings_handler)
     application.add_handler(rankings_callback_handler)

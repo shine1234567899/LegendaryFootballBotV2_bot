@@ -12,6 +12,7 @@ from sqlalchemy import select
 
 from database.database import AsyncSessionLocal
 from database.models import GameSetting, User
+from locales.catalog import LANGUAGE_NAMES
 
 
 IMAGE_FILE = (
@@ -22,18 +23,35 @@ IMAGE_FILE = (
 
 
 LANGUAGES = {
-    "fr": {
-        "name": "🇫🇷 Français",
-        "saved": "✅ Langue enregistrée : Français.",
+    code: {
+        "name": name,
+        "saved": {
+            "fr": "✅ Langue enregistrée : Français.",
+            "en": "✅ Language saved: English.",
+            "es": "✅ Idioma guardado: Español.",
+            "pt": "✅ Idioma salvo: Português.",
+            "de": "✅ Sprache gespeichert: Deutsch.",
+            "it": "✅ Lingua salvata: Italiano.",
+            "ar": "✅ تم حفظ اللغة: العربية.",
+            "tr": "✅ Dil kaydedildi: Türkçe.",
+            "nl": "✅ Taal opgeslagen: Nederlands.",
+            "ja": "✅ 言語を保存しました：日本語。",
+        }[code],
         "title": "🌍 𝐋𝐀𝐍𝐆𝐔𝐀𝐆𝐄",
-        "choose": "Choisis la langue du bot :",
-    },
-    "en": {
-        "name": "🇬🇧 English",
-        "saved": "✅ Language saved: English.",
-        "title": "🌍 𝐋𝐀𝐍𝐆𝐔𝐀𝐆𝐄",
-        "choose": "Choose the bot language:",
-    },
+        "choose": {
+            "fr": "Choisis la langue du bot :",
+            "en": "Choose the bot language:",
+            "es": "Elige el idioma del bot:",
+            "pt": "Escolha o idioma do bot:",
+            "de": "Wähle die Sprache des Bots:",
+            "it": "Scegli la lingua del bot:",
+            "ar": "اختر لغة البوت:",
+            "tr": "Bot dilini seç:",
+            "nl": "Kies de taal van de bot:",
+            "ja": "ボットの言語を選択してください：",
+        }[code],
+    }
+    for code, name in LANGUAGE_NAMES.items()
 }
 
 
@@ -227,5 +245,5 @@ language_handler = CommandHandler(
 
 language_callback_handler = CallbackQueryHandler(
     language_callback,
-    pattern=r"^language:(fr|en|close)$",
+    pattern=r"^language:(fr|en|es|pt|de|it|ar|tr|nl|ja|close)$",
 )
