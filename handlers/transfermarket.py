@@ -223,11 +223,12 @@ async def transfermarket(
 ):
 
     if (
-        update.message is None
+        update.effective_message is None
         or update.effective_user is None
     ):
         return
 
+    message = update.effective_message
     user_id = update.effective_user.id
 
     club_data = await get_user_club_data(
@@ -235,7 +236,7 @@ async def transfermarket(
     )
 
     if club_data is None:
-        await update.message.reply_text(
+        await message.reply_text(
             "❌ You don't have a club yet."
         )
         return
@@ -247,7 +248,7 @@ async def transfermarket(
     )
 
     if not listings:
-        await update.message.reply_text(
+        await message.reply_text(
             "❌ The Transfer Market is currently empty."
         )
         return
@@ -276,7 +277,7 @@ async def transfermarket(
             "rb",
         ) as photo:
 
-            await update.message.reply_photo(
+            await message.reply_photo(
                 photo=photo,
                 caption=text,
                 reply_markup=keyboard,
@@ -284,7 +285,7 @@ async def transfermarket(
 
     else:
 
-        await update.message.reply_text(
+        await message.reply_text(
             text,
             reply_markup=keyboard,
         )

@@ -7,10 +7,11 @@ from database.models import Club, ClubPlayer, Player, User,GameSetting
 
 
 async def myclub(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message is None or update.effective_user is None:
+    if update.effective_message is None or update.effective_user is None:
         return
 
     user_id = update.effective_user.id
+    message = update.effective_message
 
     async with AsyncSessionLocal() as session:
         # Récupération du club
@@ -21,7 +22,7 @@ async def myclub(update: Update, context: ContextTypes.DEFAULT_TYPE):
         club = result.scalar_one_or_none()
 
         if club is None:
-            await update.message.reply_text(
+            await message.reply_text(
                 "❌ You don't have a club yet.\n\n"
                 "Use /createclub to create one."
             )
@@ -86,9 +87,9 @@ async def myclub(update: Update, context: ContextTypes.DEFAULT_TYPE):
 )
 
     if club.logo_file_id:
-        await update.message.reply_photo(
+        await message.reply_photo(
             photo=club.logo_file_id,
             caption=caption,
         )
     else:
-        await update.message.reply_text(caption)
+        await message.reply_text(caption)

@@ -82,10 +82,11 @@ async def build_squad_page(session, club_id: int, page: int):
     
 
 async def squad(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message is None or update.effective_user is None:
+    if update.effective_message is None or update.effective_user is None:
         return
 
     user_id = update.effective_user.id
+    message = update.effective_message
 
     async with AsyncSessionLocal() as session:
         result = await session.execute(
@@ -95,7 +96,7 @@ async def squad(update: Update, context: ContextTypes.DEFAULT_TYPE):
         club = result.scalar_one_or_none()
 
         if club is None:
-            await update.message.reply_text(
+            await message.reply_text(
                 "❌ You don't have a club yet.\n\n"
                 "Use /createclub first."
             )
@@ -109,13 +110,13 @@ async def squad(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if SQUAD_BANNER.exists():
      with SQUAD_BANNER.open("rb") as photo:
-        await update.message.reply_photo(
+        await message.reply_photo(
             photo=InputFile(photo),
             caption=text,
             reply_markup=keyboard,
         )
     else:
-     await update.message.reply_text(
+     await message.reply_text(
         text,
         reply_markup=keyboard,
     )
