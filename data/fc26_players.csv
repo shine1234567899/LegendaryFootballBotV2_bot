@@ -1,0 +1,501 @@
+name,country,position,age,overall,potential,value,starter_pool
+Ayyoub Bouaddi,France,MID,18,78,86,18000000,False
+Raphael Onyedika,Nigeria,MID,24,78,84,15000000,False
+Javi Guerra,Spain,MID,22,79,87,28000000,False
+Lucas Gourna-Douath,France,MID,22,78,84,16000000,False
+Arthur Vermeeren,Belgium,MID,21,79,88,30000000,False
+Oscar Gloukh,Israel,MID,22,79,88,26000000,False
+Assan Ouedraogo,Germany,MID,19,78,88,20000000,False
+Archie Gray,England,MID,20,79,87,30000000,False
+Carlos Baleba,Cameroon,MID,22,82,89,45000000,False
+Kobbie Mainoo,England,MID,21,81,88,40000000,False
+Adam Wharton,England,MID,22,78,86,22000000,False
+Tyler Adams,USA,MID,27,78,80,14000000,False
+Youssouf Fofana,France,MID,27,80,82,22000000,False
+Manu Kone,France,MID,25,81,87,32000000,False
+Morten Hjulmand,Denmark,MID,27,82,86,38000000,False
+Martin Baturina,Croatia,MID,23,78,87,21000000,False
+Lovro Majer,Croatia,MID,28,80,82,19000000,False
+Lazar Samardzic,Serbia,MID,24,79,86,22000000,False
+Tommaso Baldanzi,Italy,MID,23,78,87,20000000,False
+Cesare Casadei,Italy,MID,23,78,85,17000000,False
+Khephren Thuram,France,MID,25,80,85,26000000,False
+Habib Diarra,Senegal,MID,22,79,87,24000000,False
+Andy Diouf,France,MID,22,78,85,18000000,False
+Dani de Wit,Netherlands,MID,28,78,79,10000000,False
+Enzo Le Fee,France,MID,26,78,82,13000000,False
+Ismael Kone,Canada,MID,24,78,84,15000000,False
+Reda Belahyane,Morocco,MID,21,78,86,18000000,False
+Bilal El Khannouss,Morocco,MID,22,80,88,28000000,False
+Eliesse Ben Seghir,Morocco,MID,21,80,89,30000000,False
+Maghnes Akliouche,France,MID,24,80,88,30000000,False
+Rayan Cherki,France,MID,22,81,88,32000000,False
+Désiré Doué,France,MID,21,82,91,50000000,False
+Warren Zaire-Emery,France,MID,20,85,93,75000000,False
+João Neves,Portugal,MID,21,84,92,70000000,False
+Vitinha,Portugal,MID,26,86,89,65000000,False
+Fermin Lopez,Spain,MID,23,80,87,30000000,False
+Pablo Torre,Spain,MID,23,78,85,16000000,False
+Aleix Garcia,Spain,MID,29,79,81,12000000,False
+Mikel Merino,Spain,MID,30,82,83,22000000,False
+Martin Zubimendi,Spain,MID,27,84,88,50000000,False
+Mikel Jauregizar,Spain,MID,22,78,85,15000000,False
+Unai Gomez,Spain,MID,23,78,84,14000000,False
+Beñat Prados,Spain,MID,25,78,83,12000000,False
+Kang-in Lee,South Korea,MID,25,82,87,32000000,False
+Hugo Larsson,Sweden,MID,22,79,88,25000000,False
+Lucas Bergvall,Sweden,MID,20,79,89,27000000,False
+Yasin Ayari,Sweden,MID,23,78,85,15000000,False
+Hakon Arnar Haraldsson,Iceland,MID,23,78,84,15000000,False
+Sverre Nypan,Norway,MID,19,78,90,20000000,False
+Antonio Nusa,Norway,ATT,21,80,89,30000000,False
+Oscar Bobb,Norway,ATT,23,78,86,18000000,False
+Johan Bakayoko,Belgium,ATT,23,81,88,32000000,False
+Samuel Iling-Junior,England,ATT,22,78,84,14000000,False
+Johan Manzambi,Switzerland,MID,20,78,87,14000000,False
+Fabio Miretti,Italy,MID,23,78,85,15000000,False
+Nicolò Fagioli,Italy,MID,25,80,84,20000000,False
+Samuele Ricci,Italy,MID,25,81,87,30000000,False
+Nicolò Rovella,Italy,MID,24,80,85,24000000,False
+Davide Frattesi,Italy,MID,26,82,85,30000000,False
+Andrea Colpani,Italy,MID,27,78,81,12000000,False
+Matteo Pessina,Italy,MID,29,78,79,9000000,False
+Kacper Kozlowski,Poland,MID,22,78,85,13000000,False
+Sebastian Szymanski,Poland,MID,27,80,82,18000000,False
+Jakub Moder,Poland,MID,27,78,80,11000000,False
+Nicola Zalewski,Poland,MID,24,78,83,15000000,False
+Jakub Kaminski,Poland,ATT,24,78,84,16000000,False
+Mateusz Bogusz,Poland,MID,24,78,84,13000000,False
+Szymon Zurkowski,Poland,MID,29,78,79,8000000,False
+Patryk Peda,Poland,DEF,23,78,84,12000000,False
+Mats Wieffer,Netherlands,MID,26,81,85,28000000,False
+Quinten Timber,Netherlands,MID,25,81,86,30000000,False
+Kenneth Taylor,Netherlands,MID,24,79,84,18000000,False
+Ryan Gravenberch,Netherlands,MID,24,82,88,35000000,False
+Jerdy Schouten,Netherlands,MID,29,80,81,14000000,False
+Teun Koopmeiners,Netherlands,MID,28,82,84,26000000,False
+Joey Veerman,Netherlands,MID,27,80,83,18000000,False
+Milos Kerkez,Hungary,DEF,22,82,88,38000000,False
+Marton Dardai,Hungary,DEF,24,78,84,12000000,False
+Attila Szalai,Hungary,DEF,28,78,79,9000000,False
+Dominik Szoboszlai,Hungary,MID,25,84,88,50000000,False
+Andras Schafer,Hungary,MID,27,78,81,10000000,False
+Bence Dardai,Hungary,MID,20,78,86,12000000,False
+Krisztian Lisztes,Hungary,MID,21,78,86,12000000,False
+Martin Vitik,Czech Republic,DEF,23,79,86,18000000,False
+Adam Hlozek,Czech Republic,ATT,23,79,85,18000000,False
+Pavel Sulc,Czech Republic,MID,25,78,83,12000000,False
+Lukas Provod,Czech Republic,MID,29,78,80,9000000,False
+David Jurasek,Czech Republic,DEF,26,78,82,10000000,False
+Tomas Soucek,Czech Republic,MID,31,80,80,10000000,False
+Ladislav Krejci,Czech Republic,DEF,27,81,85,18000000,False
+Adam Karabec,Czech Republic,MID,23,78,85,12000000,False
+Vladimir Coufal,Czech Republic,DEF,34,78,78,7000000,False
+David Zima,Czech Republic,DEF,25,78,82,10000000,False
+Jorrel Hato,Netherlands,DEF,20,80,90,32000000,False
+Dean Huijsen,Spain,DEF,21,81,89,40000000,False
+Giorgio Scalvini,Italy,DEF,22,80,89,35000000,False
+Koni De Winter,Belgium,DEF,24,78,85,17000000,False
+Zeno Debast,Belgium,DEF,22,79,87,22000000,False
+Arthur Theate,Belgium,DEF,26,80,84,20000000,False
+Wout Faes,Belgium,DEF,28,78,80,9000000,False
+Ameen Al-Dakhil,Belgium,DEF,24,78,84,10000000,False
+Maxim De Cuyper,Belgium,DEF,25,79,86,18000000,False
+Matte Smets,Belgium,DEF,21,78,86,12000000,False
+Roméo Lavia,Belgium,MID,22,81,89,35000000,False
+Amadou Onana,Belgium,MID,24,82,87,40000000,False
+Orel Mangala,Belgium,MID,28,79,81,12000000,False
+Sander Berge,Norway,MID,28,79,81,13000000,False
+Kristoffer Ajer,Norway,DEF,28,78,80,9000000,False
+Leo Ostigard,Norway,DEF,26,78,81,9000000,False
+Patrick Berg,Norway,MID,29,78,81,10000000,False
+Morten Thorsby,Norway,MID,30,78,79,8000000,False
+Fredrik Aursnes,Norway,MID,30,80,82,13000000,False
+Julian Ryerson,Norway,DEF,28,82,84,22000000,False
+Birger Meling,Norway,DEF,31,78,78,6000000,False
+Jesper Karlsson,Sweden,ATT,28,78,81,11000000,False
+Viktor Gyokeres,Sweden,ATT,28,86,90,70000000,False
+Alexander Isak,Sweden,ATT,26,85,89,80000000,False
+Benjamin Sesko,Slovenia,ATT,23,83,91,55000000,False
+Petar Stojanovic,Slovenia,DEF,30,78,79,7000000,False
+Timi Max Elsnik,Slovenia,MID,27,78,81,9000000,False
+Jaka Bijol,Slovenia,DEF,27,79,84,14000000,False
+Sandi Lovric,Slovenia,MID,28,79,82,11000000,False
+Jan Mlakar,Slovenia,ATT,27,78,80,9000000,False
+Klemen Mihelak,Slovenia,GK,26,78,83,8000000,False
+Martin Turk,Slovenia,GK,22,78,85,9000000,False
+Igor Paixao,Brazil,ATT,26,82,86,35000000,False
+Marcos Leonardo,Brazil,ATT,23,80,88,30000000,False
+Evanilson,Brazil,ATT,26,83,86,40000000,False
+Joao Pedro,Brazil,ATT,24,81,88,40000000,False
+Andrey Santos,Brazil,MID,22,79,87,22000000,False
+Andre Trindade,Brazil,MID,25,81,86,26000000,False
+Douglas Luiz,Brazil,MID,28,82,84,28000000,False
+Ederson,Brazil,MID,27,82,85,28000000,False
+Lucas Paqueta,Brazil,MID,28,83,85,35000000,False
+Gabriel Martinelli,Brazil,ATT,25,82,86,40000000,False
+Savinho,Brazil,ATT,22,83,91,55000000,False
+Gabriel Jesus,Brazil,ATT,29,80,82,22000000,False
+Richarlison,Brazil,ATT,29,80,82,22000000,False
+Raphinha,Brazil,ATT,29,85,86,55000000,False
+Rodrygo,Brazil,ATT,25,85,90,70000000,False
+Endrick,Brazil,ATT,20,81,92,45000000,False
+Estevao,Brazil,ATT,19,80,92,40000000,False
+Vitor Roque,Brazil,ATT,21,78,87,22000000,False
+Murillo,Brazil,DEF,24,81,88,35000000,False
+Bremer,Brazil,DEF,29,84,85,35000000,False
+Gabriel Magalhaes,Brazil,DEF,28,84,86,40000000,False
+Eder Militao,Brazil,DEF,28,84,87,45000000,False
+Gleison Bremer,Brazil,DEF,29,84,85,35000000,False
+Vanderson,Brazil,DEF,25,79,86,20000000,False
+Yan Couto,Brazil,DEF,24,80,86,22000000,False
+Abner,Brazil,DEF,25,78,83,10000000,False
+Beraldo,Brazil,DEF,22,78,87,18000000,False
+Wesley,Brazil,DEF,22,79,87,18000000,False
+John Kennedy,Brazil,ATT,24,78,84,12000000,False
+Pedro,Brazil,ATT,29,83,85,30000000,False
+Gabriel Pec,Brazil,ATT,25,78,83,14000000,False
+Marcos Antonio,Brazil,MID,26,78,82,10000000,False
+Danilo,Brazil,MID,25,80,85,22000000,False
+Joao Gomes,Brazil,MID,25,82,87,30000000,False
+Alan Varela,Argentina,MID,25,82,88,28000000,False
+Kevin Zenon,Argentina,MID,20,78,86,15000000,False
+Valentin Barco,Argentina,DEF,21,78,87,16000000,False
+Facundo Buonanotte,Argentina,MID,21,79,87,20000000,False
+Thiago Almada,Argentina,MID,25,82,86,32000000,False
+Claudio Echeverri,Argentina,MID,20,79,90,25000000,False
+Valentin Carboni,Argentina,MID,21,78,88,15000000,False
+Garnacho,Argentina,ATT,22,82,90,45000000,False
+Julian Alvarez,Argentina,ATT,26,87,91,85000000,False
+Lautaro Martinez,Argentina,ATT,29,88,89,75000000,False
+Nicolas Gonzalez,Argentina,ATT,28,81,84,25000000,False
+Exequiel Palacios,Argentina,MID,27,81,85,22000000,False
+Alexis Mac Allister,Argentina,MID,27,87,89,65000000,False
+Enzo Fernandez,Argentina,MID,25,86,90,80000000,False
+Lisandro Martinez,Argentina,DEF,28,84,85,40000000,False
+Cristian Romero,Argentina,DEF,28,87,88,60000000,False
+Nahuel Molina,Argentina,DEF,28,82,84,28000000,False
+Gonzalo Montiel,Argentina,DEF,29,78,80,9000000,False
+Nicolas Tagliafico,Argentina,DEF,34,78,78,6000000,False
+Facundo Medina,Argentina,DEF,27,81,85,25000000,False
+Gaston Avila,Argentina,DEF,24,78,84,12000000,False
+Walter Benitez,Argentina,GK,33,79,79,8000000,False
+Geronimo Rulli,Argentina,GK,34,80,80,8000000,False
+Matias Soule,Argentina,ATT,23,80,88,25000000,False
+Luka Romero,Argentina,ATT,21,78,86,12000000,False
+Nicolas Paz,Argentina,MID,21,80,89,24000000,False
+Tomas Palacios,Argentina,DEF,23,78,86,11000000,False
+Agustin Giay,Argentina,DEF,22,78,85,10000000,False
+Mateo Pellegrino,Argentina,ATT,24,78,84,10000000,False
+Kevin Lomónaco,Argentina,DEF,24,79,85,13000000,False
+Valentin Gomez,Argentina,DEF,23,78,84,11000000,False
+Valentín Barco,Argentina,DEF,21,78,87,16000000,False
+Luciano Gondou,Argentina,ATT,25,78,84,10000000,False
+Marcos Senesi,Argentina,DEF,29,80,82,15000000,False
+Juan Foyth,Argentina,DEF,28,79,82,14000000,False
+Taty Castellanos,Argentina,ATT,27,81,84,22000000,False
+Santiago Castro,Argentina,ATT,21,79,88,18000000,False
+Lucas Beltran,Argentina,ATT,25,78,83,14000000,False
+Nicolas Dominguez,Argentina,MID,28,80,82,15000000,False
+Yunus Musah,USA,MID,23,80,86,25000000,False
+Weston McKennie,USA,MID,27,81,82,16000000,False
+Gio Reyna,USA,MID,23,78,85,15000000,False
+Malik Tillman,USA,MID,24,79,87,18000000,False
+Folarin Balogun,USA,ATT,25,80,86,22000000,False
+Ricardo Pepi,USA,ATT,23,78,85,15000000,False
+Josh Sargent,USA,ATT,26,78,81,11000000,False
+Brenden Aaronson,USA,MID,25,78,82,10000000,False
+Chris Richards,USA,DEF,26,79,84,14000000,False
+Antonee Robinson,USA,DEF,29,82,84,20000000,False
+Joe Scally,USA,DEF,23,78,84,12000000,False
+Cameron Carter-Vickers,USA,DEF,28,79,81,9000000,False
+Yunus Akgun,Turkey,ATT,25,78,84,12000000,False
+Orkun Kokcu,Turkey,MID,25,82,86,30000000,False
+Ismail Yuksek,Turkey,MID,27,79,83,13000000,False
+Kenan Yildiz,Turkey,ATT,21,82,91,45000000,False
+Arda Guler,Turkey,MID,21,84,92,55000000,False
+Ferdi Kadioglu,Turkey,DEF,27,81,85,22000000,False
+Abdulkadir Omur,Turkey,MID,27,78,80,8000000,False
+Semih Kilicsoy,Turkey,ATT,21,79,89,18000000,False
+Baris Alper Yilmaz,Turkey,ATT,26,80,84,18000000,False
+Kaan Ayhan,Turkey,DEF,31,78,79,7000000,False
+Merih Demiral,Turkey,DEF,28,79,80,9000000,False
+Zeki Celik,Turkey,DEF,29,79,80,9000000,False
+Yusuf Yazici,Turkey,MID,29,78,79,8000000,False
+Kerem Akturkoglu,Turkey,ATT,27,81,84,18000000,False
+Cengiz Under,Turkey,ATT,29,78,79,7000000,False
+Enes Unal,Turkey,ATT,29,79,82,12000000,False
+Irfan Can Kahveci,Turkey,MID,31,79,80,8000000,False
+Abdulkerim Bardakci,Turkey,DEF,31,80,81,9000000,False
+Samet Akaydin,Turkey,DEF,32,78,78,6000000,False
+Ridle Baku,Germany,DEF,28,79,82,12000000,False
+Maximilian Mittelstadt,Germany,DEF,29,80,83,16000000,False
+Nico Schlotterbeck,Germany,DEF,26,84,88,45000000,False
+Jonathan Tah,Germany,DEF,30,83,84,25000000,False
+Waldemar Anton,Germany,DEF,30,79,81,12000000,False
+Robin Koch,Germany,DEF,30,80,82,14000000,False
+Nadiem Amiri,Germany,MID,29,79,80,9000000,False
+Pascal Gross,Germany,MID,35,78,78,6000000,False
+Angelo Stiller,Germany,MID,25,82,88,30000000,False
+Robert Andrich,Germany,MID,31,80,82,11000000,False
+Felix Nmecha,Germany,MID,25,79,84,18000000,False
+Aleksandar Pavlovic,Germany,MID,21,81,90,30000000,False
+Tom Bischof,Germany,MID,21,78,88,13000000,False
+Paul Wanner,Germany,MID,20,78,88,14000000,False
+Jamie Bynoe-Gittens,England,ATT,21,81,90,35000000,False
+Karim Adeyemi,Germany,ATT,24,82,87,30000000,False
+Maximilian Beier,Germany,ATT,23,80,86,22000000,False
+Niclas Fullkrug,Germany,ATT,33,79,79,8000000,False
+Serge Gnabry,Germany,ATT,31,80,81,18000000,False
+Timo Werner,Germany,ATT,30,78,78,9000000,False
+Florian Wirtz,Germany,MID,23,89,93,100000000,False
+Benjamin Henrichs,Germany,DEF,29,79,81,12000000,False
+David Raum,Germany,DEF,28,80,82,14000000,False
+Jeremie Frimpong,Netherlands,DEF,25,86,89,65000000,False
+Denzel Dumfries,Netherlands,DEF,30,82,83,25000000,False
+Ian Maatsen,Netherlands,DEF,24,80,87,22000000,False
+Quilindschy Hartman,Netherlands,DEF,24,78,84,12000000,False
+Devyne Rensch,Netherlands,DEF,23,78,84,12000000,False
+Lutsharel Geertruida,Netherlands,DEF,26,80,84,18000000,False
+Micky van de Ven,Netherlands,DEF,25,84,89,50000000,False
+Matthijs de Ligt,Netherlands,DEF,26,84,86,40000000,False
+Nathan Ake,Netherlands,DEF,31,82,82,18000000,False
+Stefan de Vrij,Netherlands,DEF,34,80,80,7000000,False
+Justin Kluivert,Netherlands,ATT,27,80,83,15000000,False
+Cody Gakpo,Netherlands,ATT,27,84,87,50000000,False
+Noa Lang,Netherlands,ATT,27,80,83,18000000,False
+Wout Weghorst,Netherlands,ATT,33,78,78,6000000,False
+Memphis Depay,Netherlands,ATT,32,82,83,16000000,False
+Xavi Simons,Netherlands,MID,23,84,90,50000000,False
+Jamal Musiala,Germany,MID,23,88,93,100000000,False
+Florian Neuhaus,Germany,MID,29,78,80,9000000,False
+Jonas Hofmann,Germany,MID,34,78,78,6000000,False
+Nico Elvedi,Switzerland,DEF,29,80,82,12000000,False
+Manuel Akanji,Switzerland,DEF,30,83,84,18000000,False
+Silvan Widmer,Switzerland,DEF,33,78,78,6000000,False
+Fabian Rieder,Switzerland,MID,24,78,86,14000000,False
+Ardon Jashari,Switzerland,MID,23,78,87,15000000,False
+Dan Ndoye,Switzerland,ATT,25,79,84,18000000,False
+Zeki Amdouni,Switzerland,ATT,25,78,84,14000000,False
+Noah Okafor,Switzerland,ATT,26,79,82,15000000,False
+Ruben Vargas,Switzerland,ATT,28,78,80,9000000,False
+Breel Embolo,Switzerland,ATT,29,80,81,12000000,False
+Kwadwo Duah,Switzerland,ATT,29,78,79,8000000,False
+Granit Xhaka,Switzerland,MID,33,82,82,8000000,False
+Denis Zakaria,Switzerland,MID,29,80,82,15000000,False
+Michel Aebischer,Switzerland,MID,29,78,79,7000000,False
+Fabian Schar,Switzerland,DEF,34,80,80,5000000,False
+Ricardo Rodriguez,Switzerland,DEF,33,78,78,4000000,False
+Silvan Hefti,Switzerland,DEF,28,78,80,7000000,False
+Myles Lewis-Skelly,England,LB,19,78,87,22000000,False
+Ethan Nwaneri,England,MID,19,78,88,26000000,False
+Chris Rigg,England,MID,18,78,88,25000000,False
+Harvey Elliott,England,MID,23,80,85,24000000,False
+Tyler Morton,England,MID,23,78,84,15000000,False
+Lewis Miley,England,MID,20,78,86,19000000,False
+Jobe Bellingham,England,MID,21,81,87,42000000,False
+Omari Hutchinson,England,ATT,22,79,85,22000000,False
+Morgan Rogers,England,ATT,23,83,87,42000000,False
+Anthony Elanga,Sweden,ATT,24,81,84,28000000,False
+Noni Madueke,England,ATT,24,81,85,30000000,False
+Jacob Ramsey,England,MID,25,79,83,22000000,False
+Curtis Jones,England,MID,25,81,84,26000000,False
+Conor Gallagher,England,MID,26,81,83,28000000,False
+Ben Doak,Scotland,ATT,20,78,86,18000000,False
+Tommy Conway,Scotland,ST,24,78,82,12000000,False
+James Trafford,England,GK,23,78,84,14000000,False
+Caoimhin Kelleher,Ireland,GK,27,78,82,11000000,False
+Gavin Bazunu,Ireland,GK,24,78,83,12000000,False
+Tino Livramento,England,DEF,23,80,85,26000000,False
+Levi Colwill,England,DEF,23,82,86,38000000,False
+Trevoh Chalobah,England,DEF,27,80,82,18000000,False
+Ezri Konsa,England,DEF,28,83,84,30000000,False
+Marc Guéhi,England,DEF,26,84,86,42000000,False
+Max Kilman,England,DEF,29,78,79,12000000,False
+Jarrad Branthwaite,England,DEF,24,82,86,36000000,False
+Joe Gomez,England,DEF,29,80,81,17000000,False
+Ben Johnson,England,DEF,26,78,80,12000000,False
+Djed Spence,England,DEF,26,79,83,16000000,False
+Malo Gusto,France,DEF,23,82,86,32000000,False
+Warren Zaïre-Emery,France,MID,20,84,90,65000000,False
+Bradley Barcola,France,ATT,23,84,88,52000000,False
+Hugo Ekitiké,France,ST,24,82,86,36000000,False
+Mathys Tel,France,ST,21,78,86,22000000,False
+Manu Koné,France,MID,25,82,85,32000000,False
+Khéphren Thuram,France,MID,25,81,84,24000000,False
+Boubacar Kamara,France,MID,26,80,83,20000000,False
+Castello Lukeba,France,DEF,23,82,87,38000000,False
+Wesley Fofana,France,DEF,25,80,83,20000000,False
+Jean-Clair Todibo,France,DEF,26,78,82,16000000,False
+Loïc Badé,France,DEF,26,79,82,15000000,False
+Adrien Truffert,France,DEF,24,78,83,14000000,False
+Lucas Beraldo,Brazil,DEF,22,79,85,19000000,False
+Brian Brobbey,Netherlands,ST,24,80,84,24000000,False
+Joshua Zirkzee,Netherlands,ST,25,79,84,22000000,False
+Yankuba Minteh,Gambia,ATT,21,79,86,22000000,False
+Mats Rits,Belgium,MID,33,78,78,5000000,False
+Aster Vranckx,Belgium,MID,23,78,83,14000000,False
+Mario Stroeykens,Belgium,MID,21,78,85,17000000,False
+Dodi Lukebakio,Belgium,ATT,28,81,82,16000000,False
+Loïs Openda,Belgium,ST,26,84,87,50000000,False
+Charles De Ketelaere,Belgium,ATT,25,82,85,30000000,False
+Nico Paz,Argentina,MID,21,82,89,45000000,False
+Valentín Carboni,Argentina,ATT,21,78,86,18000000,False
+Giovani Lo Celso,Argentina,MID,30,80,80,11000000,False
+Enzo Barrenechea,Argentina,MID,25,78,83,13000000,False
+Estêvão,Brazil,ATT,19,80,90,50000000,False
+João Pedro,Brazil,ST,24,82,86,35000000,False
+Igor Paixão,Brazil,ATT,25,80,84,24000000,False
+João Gomes,Brazil,MID,25,81,84,26000000,False
+Gabriel Magalhães,Brazil,DEF,28,85,86,45000000,False
+Abner Vinícius,Brazil,DEF,25,78,82,12000000,False
+Wendell,Brazil,DEF,32,78,78,5000000,False
+Lucas Piton,Brazil,DEF,25,78,82,10000000,False
+André Trindade,Brazil,MID,24,80,84,18000000,False
+Gerson,Brazil,MID,29,82,83,18000000,False
+Fermín López,Spain,MID,23,82,87,35000000,False
+Álex Baena,Spain,MID,25,84,88,42000000,False
+Yeremy Pino,Spain,ATT,23,82,86,32000000,False
+Nico Williams,Spain,ATT,24,86,89,65000000,False
+Ferran Torres,Spain,ATT,26,82,84,26000000,False
+Mikel Oyarzabal,Spain,ATT,29,84,84,24000000,False
+Dani Olmo,Spain,MID,28,85,86,45000000,False
+Fabián Ruiz,Spain,MID,30,85,85,26000000,False
+Aleix García,Spain,MID,28,79,81,13000000,False
+Marc Casadó,Spain,MID,22,78,85,17000000,False
+Pau Cubarsí,Spain,DEF,19,84,90,55000000,False
+Eric García,Spain,DEF,25,80,83,16000000,False
+Pau Torres,Spain,DEF,29,82,83,19000000,False
+Robin Le Normand,Spain,DEF,29,82,83,17000000,False
+Iván Fresneda,Spain,DEF,21,78,84,15000000,False
+Arnau Martínez,Spain,DEF,23,79,84,17000000,False
+Gavi,Spain,MID,21,83,89,50000000,False
+Kenan Yıldız,Turkey,ATT,21,81,89,45000000,False
+Arda Güler,Turkey,MID,21,82,89,50000000,False
+Semih Kılıçsoy,Turkey,ST,21,79,87,18000000,False
+İsmail Yüksek,Turkey,MID,27,78,82,10000000,False
+Orkun Kökçü,Turkey,MID,25,83,86,30000000,False
+Yunus Akgün,Turkey,ATT,25,79,84,16000000,False
+Ferdi Kadıoğlu,Turkey,DEF,26,82,85,25000000,False
+Abdülkerim Bardakcı,Turkey,DEF,31,78,79,7000000,False
+Matías Soulé,Argentina,ATT,23,80,86,28000000,False
+Lorenzo Pellegrini,Italy,MID,30,82,82,15000000,False
+Giacomo Raspadori,Italy,ATT,26,79,82,15000000,False
+Moise Kean,Italy,ST,26,82,84,22000000,False
+Gianluca Scamacca,Italy,ST,27,81,83,20000000,False
+Riccardo Orsolini,Italy,ATT,29,82,82,15000000,False
+Federico Chiesa,Italy,ATT,28,83,84,26000000,False
+Destiny Udogie,Italy,DEF,23,83,87,35000000,False
+Raoul Bellanova,Italy,DEF,26,79,82,15000000,False
+Andrea Cambiaso,Italy,DEF,26,82,85,26000000,False
+Alessandro Buongiorno,Italy,DEF,27,84,85,32000000,False
+Calafiori,Italy,DEF,24,82,86,32000000,False
+Kenji Gorré,Netherlands,ATT,31,78,78,5000000,False
+Roony Bardghji,Sweden,ATT,21,78,86,18000000,False
+Gustav Isaksen,Denmark,ATT,25,80,84,18000000,False
+Matt O'Riley,Denmark,MID,25,80,84,19000000,False
+Victor Kristiansen,Denmark,DEF,23,78,82,13000000,False
+Joachim Andersen,Denmark,DEF,30,82,82,12000000,False
+Rasmus Højlund,Denmark,ST,23,81,86,32000000,False
+Patrick Wimmer,Austria,ATT,25,79,83,16000000,False
+Konrad Laimer,Austria,MID,29,81,82,15000000,False
+Nicolas Seiwald,Austria,MID,25,78,83,13000000,False
+Kevin Danso,Austria,DEF,27,80,82,14000000,False
+Max Wöber,Austria,DEF,28,78,80,9000000,False
+Youssoufa Moukoko,Germany,ST,21,78,84,12000000,False
+Assan Ouédraogo,Germany,MID,20,78,87,18000000,False
+Benjamin Šeško,Slovenia,ST,23,84,89,55000000,False
+Luka Sučić,Croatia,MID,23,80,86,22000000,False
+Josip Stanišić,Croatia,DEF,26,81,84,22000000,False
+Joško Gvardiol,Croatia,DEF,24,86,89,60000000,False
+Vladyslav Vanat,Ukraine,ST,24,78,84,14000000,False
+Georgiy Sudakov,Ukraine,MID,23,82,87,32000000,False
+Mykhailo Mudryk,Ukraine,ATT,25,80,85,20000000,False
+Oleksandr Zinchenko,Ukraine,MID,29,81,81,12000000,False
+Illia Zabarnyi,Ukraine,DEF,23,82,87,35000000,False
+Anatoliy Trubin,Ukraine,GK,24,79,85,18000000,False
+Viktor Tsygankov,Ukraine,ATT,28,80,81,11000000,False
+Rasmus Kristensen,Denmark,DEF,29,78,79,9000000,False
+Mohamed Amoura,Algeria,ATT,26,82,86,28000000,False
+Amine Gouiri,Algeria,ATT,26,80,83,15000000,False
+Houssem Aouar,Algeria,MID,28,79,80,9000000,False
+Ismaël Bennacer,Algeria,MID,28,81,83,15000000,False
+Nabil Bentaleb,Algeria,MID,31,78,78,5000000,False
+Rayan Aït-Nouri,Algeria,DEF,25,82,85,26000000,False
+Nayef Aguerd,Morocco,DEF,30,80,81,11000000,False
+Abde Ezzalzouli,Morocco,ATT,24,80,84,19000000,False
+Amine Harit,Morocco,MID,29,79,80,8000000,False
+Noussair Mazraoui,Morocco,DEF,28,81,82,13000000,False
+Ismael Saibari,Morocco,MID,25,79,84,18000000,False
+Pape Matar Sarr,Senegal,MID,23,80,85,23000000,False
+Iliman Ndiaye,Senegal,ATT,26,80,82,14000000,False
+Nicolas Jackson,Senegal,ST,25,82,86,30000000,False
+Lamine Camara,Senegal,MID,22,79,86,19000000,False
+El Hadji Malick Diouf,Senegal,DEF,21,78,85,17000000,False
+Seko Fofana,Ivory Coast,MID,31,80,80,7000000,False
+Oumar Diakité,Ivory Coast,ST,22,78,83,12000000,False
+Simon Adingra,Ivory Coast,ATT,24,80,85,18000000,False
+Amad Diallo,Ivory Coast,ATT,24,82,88,30000000,False
+Wilfried Singo,Ivory Coast,DEF,25,80,83,15000000,False
+Franck Kessié,Ivory Coast,MID,29,82,82,13000000,False
+Abdoulaye Doucouré,Mali,MID,33,78,78,4000000,False
+Yves Bissouma,Mali,MID,30,80,81,10000000,False
+El Bilal Touré,Mali,ST,25,78,82,12000000,False
+Kamory Doumbia,Mali,MID,23,78,84,14000000,False
+Moussa Diaby,France,ATT,27,82,84,26000000,False
+Moussa Niakhaté,Senegal,DEF,30,79,80,9000000,False
+Ismaila Sarr,Senegal,ATT,28,80,81,12000000,False
+Famara Diédhiou,Senegal,ST,33,78,78,4000000,False
+Serhou Guirassy,Guinea,ST,30,87,87,28000000,False
+Ibrahim Sangaré,Ivory Coast,MID,28,80,82,12000000,False
+Wilfried Gnonto,Italy,ATT,22,79,86,18000000,False
+André Onana,Cameroon,GK,30,82,83,16000000,False
+Bryan Mbeumo,Cameroon,ATT,27,84,86,42000000,False
+Jackson Tchatchoua,Cameroon,DEF,24,78,83,12000000,False
+Zambo Anguissa,Cameroon,MID,30,82,82,12000000,False
+Takefusa Kubo,Japan,ATT,25,84,88,45000000,False
+Kaoru Mitoma,Japan,ATT,29,83,84,30000000,False
+Wataru Endo,Japan,MID,33,79,79,7000000,False
+Ao Tanaka,Japan,MID,28,78,81,9000000,False
+Ritsu Doan,Japan,ATT,28,80,82,13000000,False
+Daichi Kamada,Japan,MID,30,80,80,9000000,False
+Hiroki Ito,Japan,DEF,27,79,82,14000000,False
+Koki Machida,Japan,DEF,28,78,81,9000000,False
+Hwang Hee-chan,South Korea,ATT,30,81,82,14000000,False
+Kim Min-jae,South Korea,DEF,30,84,85,30000000,False
+Lee Kang-in,South Korea,MID,25,82,85,30000000,False
+Cho Gue-sung,South Korea,ST,28,78,80,8000000,False
+Kerem Aktürkoğlu,Turkey,ATT,27,82,84,18000000,False
+Barış Alper Yılmaz,Turkey,ATT,26,82,86,30000000,False
+Salih Özcan,Turkey,MID,28,78,80,9000000,False
+Lucas Paquetá,Brazil,MID,29,82,83,22000000,False
+Malcom,Brazil,ATT,29,80,81,13000000,False
+Perr Schuurs,Netherlands,DEF,26,78,82,13000000,False
+Santiago Giménez,Mexico,ST,25,83,86,35000000,False
+Edson Álvarez,Mexico,MID,28,82,83,18000000,False
+Johan Vásquez,Mexico,DEF,28,79,81,10000000,False
+Orbelín Pineda,Mexico,MID,30,78,79,6000000,False
+Hirving Lozano,Mexico,ATT,31,79,79,7000000,False
+Jonathan David,Canada,ST,26,86,88,50000000,False
+Tajon Buchanan,Canada,ATT,27,79,82,12000000,False
+Alphonso Davies,Canada,DEF,25,85,88,55000000,False
+Stephen Eustáquio,Canada,MID,29,79,81,10000000,False
+Tim Weah,USA,ATT,26,80,82,14000000,False
+Leandro Paredes,Argentina,MID,31,79,79,6000000,False
+Nicolás González,Argentina,ATT,28,82,83,20000000,False
+Giuliano Simeone,Argentina,ATT,23,79,85,18000000,False
+Lucas Stassin,Belgium,ST,21,78,84,14000000,False
+Kjell Peersman,Belgium,GK,21,78,84,9000000,False
+Rocco Reitz,Germany,MID,24,78,84,13000000,False
+Paris Brunner,Germany,ST,20,78,87,17000000,False
+Kacper Kozłowski,Poland,MID,22,78,84,13000000,False
+Jakub Kamiński,Poland,ATT,24,79,83,12000000,False
+Mariusz Fornalczyk,Poland,ATT,23,78,84,11000000,False
+Samu Omorodion,Spain,ST,22,82,88,36000000,False
+Marc Guiu,Spain,ST,20,78,86,17000000,False
+Abu Kamara,England,ATT,22,78,84,11000000,False
+Tom Cannon,Ireland,ST,24,78,82,10000000,False
+Luka Vušković,Croatia,DEF,19,78,88,16000000,False
+Igor Julio,Brazil,DEF,28,79,80,9000000,False
+Ismaël Doukouré,France,DEF,22,78,84,12000000,False
+Désiré Azankpo,Benin,ST,23,78,82,9000000,False
