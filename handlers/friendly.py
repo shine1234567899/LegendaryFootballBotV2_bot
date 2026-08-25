@@ -26,6 +26,8 @@ from database.models import (
     Player,
     SavedLineup,
     SavedLineupPlayer,
+    Match,
+    Fixture,
 )
 
 from match_engine.friendly import (
@@ -144,6 +146,317 @@ async def send_friendly_end_music(
 # ==========================================================
 
 ACTIVE_FRIENDLY_MATCHES = {}
+
+# ==========================================================
+# FRIENDLY PAY / FORFEIT
+# ==========================================================
+
+FRIENDLY_PAY_PRESETS = (
+    50_000,
+    100_000,
+    250_000,
+    500_000,
+    1_000_000,
+    5_000_000,
+)
+
+def _friendly_pay_store(context):
+    return context.bot_data.setdefault("friendly_pay_pending", {})
+
+
+def _friendly_pay_keyboard(match_id: str):
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                f"🪙 {amount:,}",
+                callback_data=f"friendlypay_amount:{match_id}:{amount}",
+            )
+        ]
+        for amount in FRIENDLY_PAY_PRESETS
+    ])
+
+
+def _friendly_pay_accept_keyboard(match_id: str):
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "💰 ACCEPT & PAY",
+                callback_data=f"friendlypay_accept:{match_id}",
+            ),
+            InlineKeyboardButton(
+                "❌ DECLINE",
+                callback_data=f"friendlypay_decline:{match_id}",
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                "🏳️ FORFEIT",
+                callback_data=f"friendly_forfeit:{match_id}",
+            )
+        ],
+    ])
+
+
+async def _create_friendly_db_match(home_club_id: int, away_club_id: int):
+    """Create the persistent Fixture/Match used by /stats."""
+    try:
+        fixture_id, match_id, _ = await create_friendly_match(
+            home_club_id,
+            away_club_id,
+        )
+        return fixture_id, match_id
+    except Exception as error:
+        print(
+            "⚠️ FRIENDLY DB MATCH CREATE ERROR:",
+            type(error).__name__,
+            error,
+        )
+        return None, None
+
+
+async def _finish_friendly_db_match(
+    db_match_id: int | None,
+    home_score: int,
+    away_score: int,
+    engine_result=None,
+):
+    """Persist the final Friendly result so /stats can see it."""
+    if db_match_id is None:
+        return
+
+    async with AsyncSessionLocal() as session:
+        match = await session.get(Match, int(db_match_id))
+        if match is None:
+            return
+
+        fixture = await session.get(Fixture, int(match.fixture_id))
+        if fixture is None:
+            return
+
+        # Never overwrite a match already finalized.
+        if str(match.status).lower() in {"finished", "completed", "ended"}:
+            return
+
+        match.home_score = int(home_score)
+        match.away_score = int(away_score)
+        match.minute = 90
+        match.status = "finished"
+        fixture.status = "finished"
+
+        existing_stats = match.stats if isinstance(match.stats, dict) else {}
+        if engine_result is not None:
+            engine_stats = getattr(engine_result, "statistics", None)
+            if isinstance(engine_stats, dict):
+                existing_stats["engine_statistics"] = engine_stats
+
+        match.stats = existing_stats
+
+        from datetime import datetime
+        match.finished_at = datetime.utcnow()
+
+        await session.commit()
+
+
+async def _give_friendly_rewards_once(
+    db_match_id: int | None,
+    home_user_id: int | None,
+    away_user_id: int | None,
+    home_score: int,
+    away_score: int,
+):
+    """
+    Pays the normal Friendly reward exactly once.
+    The reward marker is persisted in Match.stats, preventing a
+    duplicate payout after a restart/retry.
+    """
+    if db_match_id is None or home_user_id is None or away_user_id is None:
+        return
+
+    async with AsyncSessionLocal() as session:
+        match = await session.get(Match, int(db_match_id))
+        if match is None:
+            return
+
+        stats = match.stats if isinstance(match.stats, dict) else {}
+        if stats.get("friendly_reward_paid") is True:
+            return
+
+        home = await session.get(User, int(home_user_id))
+        away = await session.get(User, int(away_user_id))
+        if home is None or away is None:
+            return
+
+        if home_score > away_score:
+            home_reward = FRIENDLY_REWARDS["WIN"]
+            away_reward = FRIENDLY_REWARDS["DEFEAT"]
+        elif away_score > home_score:
+            home_reward = FRIENDLY_REWARDS["DEFEAT"]
+            away_reward = FRIENDLY_REWARDS["WIN"]
+        else:
+            home_reward = FRIENDLY_REWARDS["DRAW"]
+            away_reward = FRIENDLY_REWARDS["DRAW"]
+
+        home.coins = int(home.coins or 0) + home_reward
+        away.coins = int(away.coins or 0) + away_reward
+
+        stats["friendly_reward_paid"] = True
+        stats["friendly_rewards"] = {
+            "home": home_reward,
+            "away": away_reward,
+        }
+        match.stats = stats
+
+        await session.commit()
+
+
+async def _refund_friendly_stake(match_data):
+    """Refund both stakes when a paid Friendly is cancelled before play."""
+    stake = int(match_data.get("stake") or 0)
+    if stake <= 0:
+        return
+
+    if match_data.get("stake_refunded"):
+        return
+
+    async with AsyncSessionLocal() as session:
+        home = await session.get(User, int(match_data["challenger_id"]))
+        away = await session.get(User, int(match_data["opponent_id"]))
+        if home is not None:
+            home.coins = int(home.coins or 0) + stake
+        if away is not None and match_data.get("opponent_stake_taken"):
+            away.coins = int(away.coins or 0) + stake
+        await session.commit()
+
+    match_data["stake_refunded"] = True
+
+
+async def _settle_friendly_stake(match_data, home_score: int, away_score: int):
+    """Settle a paid Friendly: winner takes the pot; draw refunds both."""
+    stake = int(match_data.get("stake") or 0)
+    if stake <= 0 or match_data.get("stake_settled"):
+        return
+
+    async with AsyncSessionLocal() as session:
+        home = await session.get(User, int(match_data["challenger_id"]))
+        away = await session.get(User, int(match_data["opponent_id"]))
+        if home is None or away is None:
+            return
+
+        pot = stake * 2
+        if home_score > away_score:
+            home.coins = int(home.coins or 0) + pot
+        elif away_score > home_score:
+            away.coins = int(away.coins or 0) + pot
+        else:
+            home.coins = int(home.coins or 0) + stake
+            away.coins = int(away.coins or 0) + stake
+
+        await session.commit()
+
+    match_data["stake_settled"] = True
+
+
+async def _start_accepted_friendly(
+    query,
+    context,
+    pending,
+    match_id,
+):
+    """Shared start path for normal and paid Friendlies."""
+    challenger_id = pending["challenger_id"]
+    opponent_id = pending["opponent_id"]
+
+    home_club = await get_club_by_owner(challenger_id)
+    away_club = await get_club_by_owner(opponent_id)
+
+    if home_club is None or away_club is None:
+        pending["status"] = "CANCELLED"
+        if pending.get("stake"):
+            await _refund_friendly_stake(pending)
+        await query.message.reply_text("❌ Both managers need a club.")
+        return
+
+    try:
+        home_team = await load_saved_lineup_for_club(home_club.id)
+        away_team = await load_saved_lineup_for_club(away_club.id)
+
+        if home_team is None or away_team is None:
+            raise FriendlyError(
+                "Both clubs must have a saved lineup with exactly 11 players."
+            )
+
+        home_team.bench = await load_bench_for_club(
+            home_club.id, home_team.players
+        )
+        away_team.bench = await load_bench_for_club(
+            away_club.id, away_team.players
+        )
+    except Exception as error:
+        pending["status"] = "CANCELLED"
+        if pending.get("stake"):
+            await _refund_friendly_stake(pending)
+        await query.message.reply_text(
+            f"❌ FRIENDLY CANCELLED\n\n{error}"
+        )
+        return
+
+    pending.update({
+        "status": "LIVE",
+        "home_club_id": home_club.id,
+        "away_club_id": away_club.id,
+    })
+
+    # Persist the Friendly so /stats sees it.
+    fixture_id, db_match_id = await _create_friendly_db_match(
+        home_club.id,
+        away_club.id,
+    )
+    pending["fixture_id"] = fixture_id
+    pending["db_match_id"] = db_match_id
+
+    try:
+        initial_match_data = {
+            "engine": MatchEngine(home_team, away_team),
+            "home_team": home_team,
+            "away_team": away_team,
+            "home_club_id": home_team.club_id,
+            "away_club_id": away_team.club_id,
+        }
+
+        live_message = await _safe_reply_text(
+            query.message,
+            build_live_message(initial_match_data),
+        )
+
+        if live_message is None:
+            pending["status"] = "ERROR"
+            if pending.get("stake"):
+                await _refund_friendly_stake(pending)
+            return
+
+        await start_friendly_match(
+            context=context,
+            match_id=match_id,
+            home_team=home_team,
+            away_team=away_team,
+            chat_id=query.message.chat_id,
+            live_message_id=live_message.message_id,
+        )
+    except Exception as error:
+        pending["status"] = "ERROR"
+        if pending.get("stake"):
+            await _refund_friendly_stake(pending)
+        print(
+            "❌ FRIENDLY START ERROR:",
+            type(error).__name__,
+            error,
+        )
+        try:
+            await query.message.reply_text(
+                f"❌ The friendly match could not start.\n{type(error).__name__}: {error}"
+            )
+        except Exception:
+            pass
 
 
 # ==========================================================
@@ -1927,6 +2240,15 @@ async def start_friendly_match(
     # MATCH DATA
     # ======================================================
 
+    pending = (
+        context.bot_data
+        .get(
+            "pending_friendlies",
+            {},
+        )
+        .get(match_id)
+    )
+
     match_data = {
         "engine": engine,
         "home_team": home_team,
@@ -1939,16 +2261,11 @@ async def start_friendly_match(
         "live_message_id": live_message_id,
         "live_events": [],
         "last_telegram_update": 0.0,
+        "db_match_id": pending.get("db_match_id") if pending else None,
+        "stake": pending.get("stake", 0) if pending else 0,
+        "stake_settled": False,
+        "stake_refunded": False,
     }
-
-    pending = (
-        context.bot_data
-        .get(
-            "pending_friendlies",
-            {},
-        )
-        .get(match_id)
-    )
 
     if pending:
 
@@ -2223,12 +2540,25 @@ async def start_friendly_match(
     # COIN REWARD — ADDITIVE ONLY
     # ======================================================
 
-    await _give_friendly_rewards(
+    # Persist result first, then pay rewards exactly once.
+    db_match_id = match_data.get("db_match_id")
+    await _finish_friendly_db_match(
+        db_match_id,
+        int(result.home_score),
+        int(result.away_score),
+        result,
+    )
+    await _give_friendly_rewards_once(
+        db_match_id,
         match_data.get("challenger_id"),
         match_data.get("opponent_id"),
         int(result.home_score),
         int(result.away_score),
-        match_id,
+    )
+    await _settle_friendly_stake(
+        match_data,
+        int(result.home_score),
+        int(result.away_score),
     )
 
     # ======================================================
@@ -2405,198 +2735,71 @@ async def friendly_accept_callback(
     context: ContextTypes.DEFAULT_TYPE,
 ):
     query = update.callback_query
-
     if query is None:
         return
 
     try:
-        match_id = str(
-            query.data
-        ).split(":", 1)[1]
+        match_id = str(query.data).split(":", 1)[1]
     except Exception:
-        await query.answer(
-            "❌ Invalid challenge.",
-            show_alert=True,
-        )
         return
 
-    pending = _find_pending_invitation(
-        context,
-        match_id,
-    )
-
+    pending = _find_pending_invitation(context, match_id)
     if pending is None:
-        await query.answer(
-            "❌ Challenge no longer exists.",
-            show_alert=True,
-        )
+        await _safe_query_answer(query, "❌ Challenge no longer exists.", True)
         return
 
     if pending.get("status") != "PENDING":
-        await query.answer(
-            "❌ This challenge is no longer pending.",
-            show_alert=True,
-        )
+        await _safe_query_answer(query, "❌ This challenge is no longer pending.", True)
         return
 
     if query.from_user.id != pending["opponent_id"]:
-        await query.answer(
-            "❌ This challenge is not for you.",
-            show_alert=True,
-        )
+        await _safe_query_answer(query, "❌ This challenge is not for you.", True)
         return
 
-    challenger_id = pending["challenger_id"]
-    opponent_id = pending["opponent_id"]
+    # Paid friendly: the challenger and opponent both pay the stake atomically.
+    stake = int(pending.get("stake") or 0)
+    if stake > 0:
+        async with AsyncSessionLocal() as session:
+            challenger = await session.get(User, int(pending["challenger_id"]))
+            opponent = await session.get(User, int(pending["opponent_id"]))
 
-    home_club = await get_club_by_owner(
-        challenger_id
-    )
-    away_club = await get_club_by_owner(
-        opponent_id
-    )
+            if challenger is None or opponent is None:
+                await _safe_query_answer(query, "❌ User not found.", True)
+                return
 
-    if home_club is None or away_club is None:
-        await query.answer(
-            "❌ Both managers need a club.",
-            show_alert=True,
-        )
-        return
+            if int(challenger.coins or 0) < stake:
+                pending["status"] = "CANCELLED"
+                await _safe_query_answer(query, "❌ Challenger no longer has enough coins.", True)
+                await query.message.reply_text("❌ Friendly Pay cancelled: insufficient challenger balance.")
+                return
 
-    if home_club.id == away_club.id:
-        await query.answer(
-            "❌ Both managers cannot use the same club.",
-            show_alert=True,
-        )
-        return
+            if int(opponent.coins or 0) < stake:
+                await _safe_query_answer(query, "❌ You don't have enough coins.", True)
+                return
 
-    pending.update(
-        {
-            "status": "ACCEPTED",
-            "home_club_id": home_club.id,
-            "away_club_id": away_club.id,
-        }
-    )
+            challenger.coins = int(challenger.coins or 0) - stake
+            opponent.coins = int(opponent.coins or 0) - stake
+            await session.commit()
 
-    await query.answer(
-        "Challenge accepted!"
-    )
+        pending["opponent_stake_taken"] = True
+        pending["stake_taken"] = True
 
+    await _safe_query_answer(query, "Challenge accepted!")
     await query.edit_message_text(
         (
+            "💰 𝐅𝐑𝐈𝐄𝐍𝐃𝐋𝐘 𝐏𝐀𝐘\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"💵 Stake: {stake:,} coins each\n"
+            f"🏆 Pot: {stake * 2:,} coins\n\n"
+            "⏳ Preparing the match..."
+        ) if stake else (
             "🤝 𝐅𝐑𝐈𝐄𝐍𝐃𝐋𝐘 𝐀𝐂𝐂𝐄𝐏𝐓𝐄𝐃\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
-            f"🔴 {home_club.name}\n"
-            f"🔵 {away_club.name}\n\n"
-            "⏳ Preparing lineups..."
+            "⏳ Preparing the match..."
         )
     )
 
-    try:
-        home_team = await load_saved_lineup_for_club(
-            home_club.id
-        )
-        away_team = await load_saved_lineup_for_club(
-            away_club.id
-        )
-
-        if home_team is None or away_team is None:
-            raise FriendlyError(
-                "Both clubs must have a saved lineup with exactly 11 players."
-            )
-
-        home_team.bench = await load_bench_for_club(
-            home_club.id,
-            home_team.players,
-        )
-
-        away_team.bench = await load_bench_for_club(
-            away_club.id,
-            away_team.players,
-        )
-
-    except Exception as error:
-        pending["status"] = "CANCELLED"
-
-        await query.message.reply_text(
-            (
-                "❌ 𝐅𝐑𝐈𝐄𝐍𝐃𝐋𝐘 𝐂𝐀𝐍𝐂𝐄𝐋𝐋𝐄𝐃\n\n"
-                f"{error}"
-            )
-        )
-        return
-
-    # Start the match immediately after ACCEPT.
-    # No preparation countdown.
-    if match_id in ACTIVE_FRIENDLY_MATCHES:
-        return
-
-    pending["status"] = "LIVE"
-
-    try:
-        initial_match_data = {
-            "engine": MatchEngine(
-                home_team,
-                away_team,
-            ),
-            "home_team": home_team,
-            "away_team": away_team,
-            "home_club_id": home_team.club_id,
-            "away_club_id": away_team.club_id,
-        }
-
-        live_message = await _safe_reply_text(
-            query.message,
-            build_live_message(
-                initial_match_data
-            ),
-        )
-
-        if live_message is None:
-            pending["status"] = "ERROR"
-
-            print(
-                "❌ FRIENDLY START ERROR: "
-                "Telegram could not send the live match message "
-                "after retries."
-            )
-
-            await _safe_reply_text(
-                query.message,
-                (
-                    "❌ The live match message could not be sent "
-                    "because Telegram timed out.\n"
-                    "Please try /friendly again in a moment."
-                ),
-            )
-            return
-
-        await start_friendly_match(
-            context=context,
-            match_id=match_id,
-            home_team=home_team,
-            away_team=away_team,
-            chat_id=query.message.chat_id,
-            live_message_id=live_message.message_id,
-        )
-    except Exception as error:
-        pending["status"] = "ERROR"
-
-        print(
-            "❌ FRIENDLY START ERROR:",
-            type(error).__name__,
-            error,
-        )
-
-        try:
-            await query.message.reply_text(
-                (
-                    "❌ The friendly match could not start.\n"
-                    f"{type(error).__name__}: {error}"
-                )
-            )
-        except Exception:
-            pass
+    await _start_accepted_friendly(query, context, pending, match_id)
 
 
 async def friendly_decline_callback(
@@ -2650,6 +2853,169 @@ async def friendly_decline_callback(
             "━━━━━━━━━━━━━━━━━━━━\n"
             "The opponent declined the challenge."
         )
+    )
+
+
+async def friendlypay(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Create a Friendly Pay challenge. Coins are virtual only."""
+    if update.effective_user is None or update.message is None:
+        return
+
+    if len(context.args) != 1:
+        await update.message.reply_text(
+            "Usage:\n/friendlypay @username\n\nThen choose the stake."
+        )
+        return
+
+    opponent = context.args[0].strip()
+    if not opponent.startswith("@"):
+        await update.message.reply_text("❌ Use /friendlypay @username")
+        return
+
+    challenger = update.effective_user
+    invited_user = await get_user_by_username(opponent)
+    if invited_user is None:
+        await update.message.reply_text("❌ This username is not registered.")
+        return
+    if invited_user.id == challenger.id:
+        await update.message.reply_text("❌ You cannot challenge yourself.")
+        return
+
+    club = await get_club_by_owner(challenger.id)
+    if club is None:
+        await update.message.reply_text("❌ Create your club first.")
+        return
+
+    match_id = f"pay_{challenger.id}_{invited_user.id}_{int(time.time()*1000)}"
+    pending = {
+        "match_id": match_id,
+        "challenger_id": challenger.id,
+        "opponent_id": invited_user.id,
+        "challenger_username": (
+            f"@{challenger.username}" if challenger.username else challenger.first_name
+        ),
+        "opponent_username": opponent,
+        "chat_id": update.effective_chat.id if update.effective_chat else challenger.id,
+        "status": "CHOOSING_STAKE",
+        "stake": 0,
+    }
+    _friendly_pay_store(context)[match_id] = pending
+
+    await update.message.reply_text(
+        (
+            "💰 𝐅𝐑𝐈𝐄𝐍𝐃𝐋𝐘 𝐏𝐀𝐘\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"🔴 {club.name}\n"
+            f"🎯 Opponent: {opponent}\n\n"
+            "💵 Choose the virtual coin stake.\n"
+            "Both managers must put the same amount."
+        ),
+        reply_markup=_friendly_pay_keyboard(match_id),
+    )
+
+
+async def friendlypay_amount_callback(update, context):
+    query = update.callback_query
+    if query is None:
+        return
+    try:
+        _, match_id, amount = str(query.data).split(":")
+        amount = int(amount)
+    except Exception:
+        return
+
+    pending = _friendly_pay_store(context).get(match_id)
+    if pending is None or pending.get("status") != "CHOOSING_STAKE":
+        await _safe_query_answer(query, "❌ This offer expired.", True)
+        return
+
+    if query.from_user.id != pending["challenger_id"]:
+        await _safe_query_answer(query, "❌ Only the challenger chooses the stake.", True)
+        return
+
+    async with AsyncSessionLocal() as session:
+        user = await session.get(User, int(query.from_user.id))
+        if user is None or int(user.coins or 0) < amount:
+            await _safe_query_answer(query, "❌ Not enough coins.", True)
+            return
+
+    pending["stake"] = amount
+    pending["status"] = "PENDING"
+
+    await _safe_query_answer(query, "Stake selected.")
+    await query.edit_message_text(
+        (
+            "💰 𝐅𝐑𝐈𝐄𝐍𝐃𝐋𝐘 𝐏𝐀𝐘\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"🔴 {pending['challenger_username']}\n"
+            f"🔵 {pending['opponent_username']}\n\n"
+            f"💵 Stake: {amount:,} coins each\n"
+            f"🏆 Pot: {amount * 2:,} coins\n\n"
+            "The opponent must accept and pay the same stake."
+        ),
+        reply_markup=_friendly_pay_accept_keyboard(match_id),
+    )
+
+
+async def friendlypay_accept_callback(update, context):
+    # Reuse the same secure acceptance flow.
+    query = update.callback_query
+    if query is None:
+        return
+    query.data = f"friendly_accept:{str(query.data).split(':', 1)[1]}"
+    await friendly_accept_callback(update, context)
+
+
+async def friendlypay_decline_callback(update, context):
+    query = update.callback_query
+    if query is None:
+        return
+    try:
+        match_id = str(query.data).split(":", 1)[1]
+    except Exception:
+        return
+    pending = _friendly_pay_store(context).get(match_id)
+    if pending is None:
+        return
+    if query.from_user.id != pending["opponent_id"]:
+        await _safe_query_answer(query, "❌ This offer is not for you.", True)
+        return
+    pending["status"] = "DECLINED"
+    await _safe_query_answer(query, "Offer declined.")
+    await query.edit_message_text("❌ Friendly Pay declined.")
+
+
+async def friendly_forfeit_callback(update, context):
+    query = update.callback_query
+    if query is None:
+        return
+    try:
+        match_id = str(query.data).split(":", 1)[1]
+    except Exception:
+        return
+
+    pending = _friendly_pending_store(context).get(match_id)
+    if pending is None:
+        pending = _friendly_pay_store(context).get(match_id)
+
+    if pending is None:
+        await _safe_query_answer(query, "❌ Match not found.", True)
+        return
+
+    # Forfeit is for a pending challenge: the challenger cancels it
+    # when the opponent has not answered.
+    if query.from_user.id != pending.get("challenger_id"):
+        await _safe_query_answer(query, "❌ Only the challenger can forfeit this pending match.", True)
+        return
+
+    if pending.get("status") not in {"PENDING", "CHOOSING_STAKE"}:
+        await _safe_query_answer(query, "❌ The match is already accepted/live.", True)
+        return
+
+    pending["status"] = "FORFEITED"
+    await _safe_query_answer(query, "Challenge cancelled.")
+    await query.edit_message_text(
+        "🏳️ 𝐅𝐎𝐑𝐅𝐄𝐈𝐓\n━━━━━━━━━━━━━━━━━━━━\nThe friendly challenge has been cancelled."
     )
 
 
@@ -2784,6 +3150,34 @@ async def friendly_callback_router(
         )
         return
 
+    if data.startswith("friendlypay_amount:"):
+        context.application.create_task(
+            friendlypay_amount_callback(update, context),
+            update=update,
+        )
+        return
+
+    if data.startswith("friendlypay_accept:"):
+        context.application.create_task(
+            friendlypay_accept_callback(update, context),
+            update=update,
+        )
+        return
+
+    if data.startswith("friendlypay_decline:"):
+        context.application.create_task(
+            friendlypay_decline_callback(update, context),
+            update=update,
+        )
+        return
+
+    if data.startswith("friendly_forfeit:"):
+        context.application.create_task(
+            friendly_forfeit_callback(update, context),
+            update=update,
+        )
+        return
+
     if data.startswith("subs_player:"):
         context.application.create_task(
             subs_player_callback(update, context),
@@ -2832,7 +3226,7 @@ friendly_decline_handler = CallbackQueryHandler(
 
 friendly_callback_router_handler = CallbackQueryHandler(
     friendly_callback_router,
-    pattern=r"^(friendly_accept|friendly_decline|subs_player|subs_replace|subs_refresh):.+$",
+    pattern=r"^(friendly_accept|friendly_decline|friendlypay_amount|friendlypay_accept|friendlypay_decline|friendly_forfeit|subs_player|subs_replace|subs_refresh):.+$",
 )
 
 subs_player_handler = CallbackQueryHandler(
@@ -2848,4 +3242,19 @@ subs_replace_handler = CallbackQueryHandler(
 subs_refresh_handler = CallbackQueryHandler(
     subs_refresh_callback,
     pattern=r"^subs_refresh:\d+$",
+)
+
+friendlypay_handler = CommandHandler(
+    "friendlypay",
+    friendlypay,
+)
+
+friendlypay_callback_handler = CallbackQueryHandler(
+    friendly_callback_router,
+    pattern=r"^(friendlypay_amount|friendlypay_accept|friendlypay_decline|friendly_forfeit):.+$",
+)
+
+friendly_forfeit_handler = CallbackQueryHandler(
+    friendly_forfeit_callback,
+    pattern=r"^friendly_forfeit:.+$",
 )

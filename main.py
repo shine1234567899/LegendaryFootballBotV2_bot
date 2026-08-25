@@ -141,7 +141,7 @@ from handlers.commandrank import commandrank_handler
 from handlers.richlist import richlist_handler, richlist_callback_handler
 from handlers.command_tracker import command_tracker_handler
 from handlers.referral_processor import referral_start_middleware
-
+from handlers.pari import pari_handler
 
 
 
@@ -428,7 +428,7 @@ def main():
     application.add_handler(commandrank_handler)
     application.add_handler(richlist_handler)
     application.add_handler(richlist_callback_handler)
-
+    application.add_handler(pari_handler)
     # ======================================================
     # START
     # ======================================================
