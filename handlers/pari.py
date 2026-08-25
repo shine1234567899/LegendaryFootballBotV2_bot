@@ -1,4 +1,5 @@
 import random
+import re
 from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes
 from sqlalchemy import select, update
@@ -6,12 +7,44 @@ from sqlalchemy import select, update
 from database.database import AsyncSessionLocal
 from database.models import User
 
+# Fonction pour échapper les caractères spéciaux MarkdownV2
+def escape_markdown(text: str) -> str:
+    escape_chars = r'_*[]()~`>#+-=|{}.!'
+    return re.sub(r'([%s])' % re.escape(escape_chars), r'\\\1', text)
+
 # Liste d'équipes possibles
 equipes = [
-    "Paris SG", "Marseille", "Real Madrid", "FC Barcelone", "Manchester city", "Arsenal",
-    "liverpool", "Bayern munich", "Borussia dortmund", "Ac milan", "Inter Milan",
-    "Brentford", "Newcastle", "Tottenham Hostpur", "Chelsea", "Atlético Madrid",
-    "Lens", "Monaco",
+    
+    # France
+    "Paris SG", "Marseille", "Lyon", "Monaco", "Bordeaux", "Nantes", "Nice", "Lille",
+    # Espagne
+    "Real Madrid", "FC Barcelona", "Atletico Madrid", "Sevilla", "Valencia",
+    # Angleterre
+    "Manchester United", "Liverpool", "Chelsea", "Arsenal", "Manchester City",
+    # Italie
+    "Juventus", "AC Milan", "Inter Milan", "AS Roma", "Napoli",
+    # Allemagne
+    "Bayern Munich", "Borussia Dortmund", "RB Leipzig", "Bayer Leverkusen", "Schalke 04",
+    # Portugal
+    "Benfica", "Porto", "Sporting CP",
+    # Pays-Bas
+    "Ajax", "PSV Eindhoven", "Feyenoord",
+    # Argentine
+    "Boca Juniors", "River Plate", "Racing Club",
+    # Brésil
+    "Flamengo", "Palmeiras", "Santos",
+    # Russie
+    "Zenit Saint Petersburg", "CSKA Moscow", "Spartak Moscow",
+    # Turquie
+    "Galatasaray", "Fenerbahce", "Besiktas",
+    # Belgique
+    "Club Brugge", "Anderlecht", "Standard Liège",
+    # Suisse
+    "FC Basel", "Young Boys", "FC Zurich",
+    # Écosse
+    "Celtic", "Rangers",
+
+ 
 ]
 
 def _format_amount(value: int) -> str:
@@ -50,18 +83,19 @@ async def pari(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) == 0:
         text = "🎲 *Matchs disponibles pour parier :*\n\n"
         for i, match in enumerate(matches, 1):
-            text += f"{i}. {match['teams']}\n"
+            teams_escaped = escape_markdown(match['teams'])
+            text += f"{i}. {teams_escaped}\n"
             text += f"   Victoire: x{match['odds']['victoire']}\n"
             text += f"   Nul: x{match['odds']['nul']}\n"
             text += f"   Défaite: x{match['odds']['defaite']}\n\n"
         text += "Utilise la commande : /pari <numéro_match> <victoire|nul|defaite> <mise>"
-        await message.reply_text(text, parse_mode="Markdown")
-        # Stocker les matchs pour cet utilisateur (optionnel, voir note ci-dessous)
+
+        await message.reply_text(text, parse_mode="MarkdownV2")
+        # Stocker les matchs pour cet utilisateur
         context.user_data["matches"] = matches
         return
 
-    # Vérifier qu'à chaque pari on utilise les matchs affichés précédemment
-    # On récupère les matchs sauvegardés (sinon on génère à nouveau)
+    # Vérifie que l'utilisateur a les matchs stockés
     matches = context.user_data.get("matches")
     if matches is None:
         await message.reply_text("❌ Tes matchs ont expiré. Envoie /pari pour voir les nouveaux matchs.")
@@ -123,10 +157,12 @@ async def pari(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await session.execute(update(User).where(User.id == user.id).values(coins=new_coins))
         await session.commit()
 
-        reponse = f"Match : {matches[num_match -1]['teams']}\n"
-        reponse += f"Résultat réel : {resultat_reel.capitalize()}\n"
-        reponse += f"Tu as parié sur : {choix}\n"
-        reponse += f"Mise : {mise} coins\n\n"
+        reponse = (
+            f"Match : {escape_markdown(matches[num_match -1]['teams'])}\n"
+            f"Résultat réel : {escape_markdown(resultat_reel.capitalize())}\n"
+            f"Tu as parié sur : {escape_markdown(choix)}\n"
+            f"Mise : {mise} coins\n\n"
+        )
 
         if gagne:
             reponse += f"🎉 Félicitations ! Tu as gagné {gain} coins.\n"
@@ -135,6 +171,6 @@ async def pari(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         reponse += f"Solde actuel : {_format_amount(new_coins)} coins."
 
-        await message.reply_text(reponse)
+        await message.reply_text(reponse, parse_mode="MarkdownV2")
 
 pari_handler = CommandHandler("pari", pari)
