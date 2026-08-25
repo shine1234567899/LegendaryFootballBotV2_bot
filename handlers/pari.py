@@ -1,7 +1,7 @@
 import random
 from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes
-from sqlalchemy import select, update
+from sqlalchemy import select, update as sqlalchemy_update
 
 from database.database import AsyncSessionLocal
 from database.models import User
@@ -28,18 +28,24 @@ def _format_amount(value: int) -> str:
     return f"{int(value or 0):,}"
 
 def _random_result():
-    results = ["victoire", "nul", "defaite"]
+    # Résultat possible : victoire équipe1 = 'v1', nul = 'nul', victoire équipe2 = 'v2'
+    results = ["v1", "nul", "v2"]
     weights = [0.4, 0.3, 0.3]
     return random.choices(results, weights)[0]
 
 def _generate_match():
+    # Choisit 2 équipes différentes au hasard
     team1, team2 = random.sample(equipes, 2)
+    # Cotes pour victoire équipe1, nul, victoire équipe2
     odds = {
-        "victoire": round(random.uniform(1.5, 3.0), 2),
+        "v1": round(random.uniform(1.5, 3.0), 2),
         "nul": round(random.uniform(2.5, 4.0), 2),
-        "defaite": round(random.uniform(1.5, 3.0), 2),
+        "v2": round(random.uniform(1.5, 3.0), 2),
     }
+    # Stocke les noms pour affichage clair
     return {
+        "team1": team1,
+        "team2": team2,
         "teams": f"{team1} vs {team2}",
         "odds": odds
     }
@@ -51,43 +57,46 @@ async def pari(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user is None or message is None:
         return
 
-    matches = [_generate_match() for _ in range(3)]
-
+    # Si pas d'arguments, affiche 3 matchs aléatoires à parier
     if len(context.args) == 0:
+        matches = [_generate_match() for _ in range(3)]
+        context.user_data["matches"] = matches
+
         text = "Matchs disponibles pour parier :\n\n"
         for i, match in enumerate(matches, 1):
             text += f"{i}. {match['teams']}\n"
-            text += f"   Victoire: x{match['odds']['victoire']}\n"
+            text += f"   Victoire {match['team1']}: x{match['odds']['v1']}\n"
             text += f"   Nul: x{match['odds']['nul']}\n"
-            text += f"   Défaite: x{match['odds']['defaite']}\n\n"
-        text += "Utilise la commande : /pari <numéro_match> <victoire|nul|defaite> <mise>"
-
+            text += f"   Victoire {match['team2']}: x{match['odds']['v2']}\n\n"
+        text += "Pour parier, utilise la commande : /pari <numéro_match> <v1|nul|v2> <mise>"
         await message.reply_text(text)
-        context.user_data["matches"] = matches
         return
 
+    # Récupère les matchs stockés (doivent avoir été affichés avant)
     matches = context.user_data.get("matches")
     if matches is None:
         await message.reply_text("Tes matchs ont expiré. Envoie /pari pour voir les nouveaux matchs.")
         return
 
     if len(context.args) != 3:
-        await message.reply_text("Usage : /pari <numéro_match> <victoire|nul|defaite> <mise>")
+        await message.reply_text("Usage : /pari <numéro_match> <v1|nul|v2> <mise>")
         return
 
+    # Valide numéro du match
     try:
         num_match = int(context.args[0])
-        if num_match < 1 or num_match > len(matches):
+        if not 1 <= num_match <= len(matches):
             raise ValueError
     except ValueError:
         await message.reply_text("Le numéro du match est invalide.")
         return
 
     choix = context.args[1].lower()
-    if choix not in ["victoire", "nul", "defaite"]:
-        await message.reply_text("Choix invalide. Utilise victoire, nul ou defaite.")
+    if choix not in ["v1", "nul", "v2"]:
+        await message.reply_text("Choix invalide. Utilise v1 (victoire équipe 1), nul ou v2 (victoire équipe 2).")
         return
 
+    # Valide mise
     try:
         mise = int(context.args[2])
         if mise <= 0:
@@ -121,23 +130,35 @@ async def pari(update: Update, context: ContextTypes.DEFAULT_TYPE):
             new_coins += gain
             gagne = True
 
-        await session.execute(update(User).where(User.id == user.id).values(coins=new_coins))
+        # Met à jour la base de données
+        await session.execute(
+            sqlalchemy_update(User).where(User.id == user.id).values(coins=new_coins)
+        )
         await session.commit()
 
-        reponse = (
-            f"Match : {matches[num_match -1]['teams']}\n"
-            f"Résultat réel : {resultat_reel.capitalize()}\n"
-            f"Tu as parié sur : {choix}\n"
+        match = matches[num_match - 1]
+        resultat_texte = {
+            "v1": f"Victoire {match['team1']}",
+            "nul": "Match Nul",
+            "v2": f"Victoire {match['team2']}"
+        }
+
+        response = (
+            f"Match : {match['teams']}\n"
+            f"Résultat réel : {resultat_texte[resultat_reel]}\n"
+            f"Tu as parié sur : {choix} - "
+            f"{'Victoire ' + match['team1'] if choix=='v1' else 'Nul' if choix=='nul' else 'Victoire ' + match['team2']}\n"
             f"Mise : {mise} coins\n\n"
         )
 
         if gagne:
-            reponse += f"Félicitations ! Tu as gagné {gain} coins.\n"
+            response += f"Félicitations ! Tu as gagné {gain} coins.\n"
         else:
-            reponse += "Désolé, tu as perdu ta mise.\n"
+            response += "Désolé, tu as perdu ta mise.\n"
 
-        reponse += f"Solde actuel : {_format_amount(new_coins)} coins."
+        response += f"Solde actuel : {_format_amount(new_coins)} coins."
 
-        await message.reply_text(reponse)
-        
+        await message.reply_text(response)
+
+
 pari_handler = CommandHandler("pari", pari)
