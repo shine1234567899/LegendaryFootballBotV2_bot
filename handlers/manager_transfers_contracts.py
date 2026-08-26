@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram import Update
+from telegram.ext import CommandHandler, ContextTypes
 from sqlalchemy import select
 
 from database.database import AsyncSessionLocal
@@ -16,27 +16,67 @@ from database.models import (
 )
 
 
+# ==========================================================
+# HELPERS
+# ==========================================================
+
 async def _manager_club(session, user_id: int):
     return await session.scalar(
-        select(Club).where(Club.owner_id == user_id)
+        select(Club).where(
+            Club.owner_id == user_id
+        )
     )
 
 
-async def _owned_player(session, club_id: int, player_name: str):
+async def _owned_player(
+    session,
+    club_id: int,
+    player_name: str,
+):
+    """
+    Case-insensitive exact player-name lookup among the
+    manager's CURRENT players.
+    """
+    name = player_name.strip()
+
+    if not name:
+        return None
+
     result = await session.execute(
         select(ClubPlayer, Player)
-        .join(Player, Player.id == ClubPlayer.player_id)
+        .join(
+            Player,
+            Player.id == ClubPlayer.player_id,
+        )
         .where(
             ClubPlayer.club_id == club_id,
             ClubPlayer.is_current.is_(True),
-            Player.name.ilike(player_name.strip()),
+            Player.name.ilike(name),
         )
     )
+
     return result.first()
 
 
-async def sell_player(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Put one of the manager's current players on the transfer market."""
+# ==========================================================
+# SELL PLAYER
+# ==========================================================
+
+async def sell_player(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    """
+    List one current squad player on the Transfer Market.
+
+    Usage:
+        /sellplayer Player Name PRICE
+
+    Important:
+        TransferMarket uses status='available' for listings.
+        The previous manager handler used 'active', which meant
+        the listing was invisible to the market and /mytransfers.
+    """
     message = update.effective_message
     user = update.effective_user
 
@@ -45,30 +85,51 @@ async def sell_player(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if len(context.args) < 2:
         await message.reply_text(
-            "🔄 Usage:\n"
-            "/sellplayer Player Name price\n\n"
+            "🔄 𝐒𝐄𝐋𝐋 𝐏𝐋𝐀𝐘𝐄𝐑\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "Usage:\n"
+            "/sellplayer Player Name Price\n\n"
             "Example:\n"
             "/sellplayer Cristiano Ronaldo 50000000"
         )
         return
 
+    raw_price = context.args[-1]
+
     try:
-        price = int(context.args[-1])
-    except ValueError:
-        await message.reply_text("❌ Price must be a number.")
+        price = int(raw_price)
+    except (TypeError, ValueError):
+        await message.reply_text(
+            "❌ The price must be a whole number."
+        )
         return
 
-    player_name = " ".join(context.args[:-1]).strip()
+    if price <= 0:
+        await message.reply_text(
+            "❌ The price must be greater than 0."
+        )
+        return
 
-    if not player_name or price <= 0:
-        await message.reply_text("❌ Invalid player or price.")
+    player_name = " ".join(
+        context.args[:-1]
+    ).strip()
+
+    if not player_name:
+        await message.reply_text(
+            "❌ Player name is missing."
+        )
         return
 
     async with AsyncSessionLocal() as session:
-        club = await _manager_club(session, user.id)
+        club = await _manager_club(
+            session,
+            user.id,
+        )
 
         if club is None:
-            await message.reply_text("❌ You don't have a club.")
+            await message.reply_text(
+                "❌ You don't have a club."
+            )
             return
 
         owned = await _owned_player(
@@ -85,12 +146,14 @@ async def sell_player(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         club_player, player = owned
 
-        # A player already listed by this club cannot be listed twice.
+        # Do not allow duplicate active/available listings.
         existing = await session.scalar(
             select(TransferListing).where(
                 TransferListing.player_id == player.id,
                 TransferListing.seller_club_id == club.id,
-                TransferListing.status == "active",
+                TransferListing.status.in_(
+                    ["available", "active"]
+                ),
             )
         )
 
@@ -100,11 +163,30 @@ async def sell_player(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        # A listed player must no longer count as current in the squad.
-        club_player.is_current = False
-        club_player.left_at = datetime.now(timezone.utc)
+        # Also prevent a second listing for the same player
+        # from another source.
+        global_existing = await session.scalar(
+            select(TransferListing).where(
+                TransferListing.player_id == player.id,
+                TransferListing.status.in_(
+                    ["available", "active"]
+                ),
+            )
+        )
 
-        # Disable the active contract while the player is on the market.
+        if global_existing is not None:
+            await message.reply_text(
+                "❌ This player is already on the Transfer Market."
+            )
+            return
+
+        now = datetime.now(timezone.utc)
+
+        # Remove player from the current squad while listed.
+        club_player.is_current = False
+        club_player.left_at = now
+
+        # Stop his old salary contract while he is listed.
         contract = await session.scalar(
             select(PlayerContract).where(
                 PlayerContract.club_id == club.id,
@@ -116,12 +198,15 @@ async def sell_player(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if contract is not None:
             contract.active = False
 
+        # IMPORTANT:
+        # transfermarket.py buys only listings with status
+        # "available". This is the key fix.
         listing = TransferListing(
             player_id=player.id,
             seller_club_id=club.id,
             price=price,
             currency="coins",
-            status="active",
+            status="available",
         )
 
         session.add(listing)
@@ -131,17 +216,25 @@ async def sell_player(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔄 𝐏𝐋𝐀𝐘𝐄𝐑 𝐋𝐈𝐒𝐓𝐄𝐃\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         f"⚽ Player: {player.name}\n"
+        f"⭐ Overall: {player.overall}\n"
         f"💰 Asking price: {price:,} Coins\n"
         f"🏟️ Club: {club.name}\n\n"
-        "📢 The player is now available on the transfer market."
+        "📢 The player is now available on the Transfer Market."
     )
 
+
+# ==========================================================
+# RELEASE PLAYER
+# ==========================================================
 
 async def release_player(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
-    """Release a player without a transfer fee."""
+    """
+    Release a player and put him on the Transfer Market
+    at his normal market value.
+    """
     message = update.effective_message
     user = update.effective_user
 
@@ -155,13 +248,20 @@ async def release_player(
         )
         return
 
-    player_name = " ".join(context.args).strip()
+    player_name = " ".join(
+        context.args
+    ).strip()
 
     async with AsyncSessionLocal() as session:
-        club = await _manager_club(session, user.id)
+        club = await _manager_club(
+            session,
+            user.id,
+        )
 
         if club is None:
-            await message.reply_text("❌ You don't have a club.")
+            await message.reply_text(
+                "❌ You don't have a club."
+            )
             return
 
         owned = await _owned_player(
@@ -179,6 +279,21 @@ async def release_player(
         club_player, player = owned
         now = datetime.now(timezone.utc)
 
+        existing = await session.scalar(
+            select(TransferListing).where(
+                TransferListing.player_id == player.id,
+                TransferListing.status.in_(
+                    ["available", "active"]
+                ),
+            )
+        )
+
+        if existing is not None:
+            await message.reply_text(
+                "❌ This player is already on the Transfer Market."
+            )
+            return
+
         club_player.is_current = False
         club_player.left_at = now
 
@@ -193,25 +308,20 @@ async def release_player(
         if contract is not None:
             contract.active = False
 
-        # If there is already an active listing, leave it alone.
-        # Otherwise create a normal-value listing.
-        listing = await session.scalar(
-            select(TransferListing).where(
-                TransferListing.player_id == player.id,
-                TransferListing.status == "active",
-            )
+        market_value = max(
+            int(player.value or 0),
+            1,
         )
 
-        if listing is None:
-            session.add(
-                TransferListing(
-                    player_id=player.id,
-                    seller_club_id=None,
-                    price=max(int(player.value or 0), 1),
-                    currency="coins",
-                    status="active",
-                )
+        session.add(
+            TransferListing(
+                player_id=player.id,
+                seller_club_id=None,
+                price=market_value,
+                currency="coins",
+                status="available",
             )
+        )
 
         await session.commit()
 
@@ -219,16 +329,21 @@ async def release_player(
         "❌ 𝐏𝐋𝐀𝐘𝐄𝐑 𝐑𝐄𝐋𝐄𝐀𝐒𝐄𝐃\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         f"⚽ Player: {player.name}\n"
-        f"💰 Market value: {player.value:,} Coins\n\n"
+        f"⭐ Overall: {player.overall}\n"
+        f"💰 Market value: {market_value:,} Coins\n\n"
         "🔄 The player has been released and placed on the market."
     )
 
+
+# ==========================================================
+# MY TRANSFERS
+# ==========================================================
 
 async def my_transfers(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
-    """Show the manager's active listings."""
+    """Show all active listings belonging to this manager."""
     message = update.effective_message
     user = update.effective_user
 
@@ -236,43 +351,74 @@ async def my_transfers(
         return
 
     async with AsyncSessionLocal() as session:
-        club = await _manager_club(session, user.id)
+        club = await _manager_club(
+            session,
+            user.id,
+        )
 
         if club is None:
-            await message.reply_text("❌ You don't have a club.")
+            await message.reply_text(
+                "❌ You don't have a club."
+            )
             return
 
         result = await session.execute(
-            select(TransferListing, Player)
-            .join(Player, Player.id == TransferListing.player_id)
+            select(
+                TransferListing,
+                Player,
+            )
+            .join(
+                Player,
+                Player.id == TransferListing.player_id,
+            )
             .where(
                 TransferListing.seller_club_id == club.id,
-                TransferListing.status == "active",
+                TransferListing.status.in_(
+                    ["available", "active"]
+                ),
             )
-            .order_by(Player.name)
+            .order_by(
+                Player.name.asc()
+            )
         )
 
         rows = result.all()
 
     if not rows:
         await message.reply_text(
-            "🔄 Your club has no active transfer listings."
+            "🔄 𝐌𝐘 𝐓𝐑𝐀𝐍𝐒𝐅𝐄𝐑𝐒\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "📭 You have no active players on the market."
         )
         return
 
-    text = (
-        "🔄 𝐌𝐘 𝐓𝐑𝐀𝐍𝐒𝐅𝐄𝐑𝐒\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-    )
+    lines = [
+        "🔄 𝐌𝐘 𝐓𝐑𝐀𝐍𝐒𝐅𝐄𝐑𝐒",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "",
+    ]
 
-    for listing, player in rows:
-        text += (
-            f"⚽ {player.name}\n"
-            f"💰 {listing.price:,} {listing.currency.upper()}\n\n"
+    for index, (listing, player) in enumerate(
+        rows,
+        start=1,
+    ):
+        lines.extend(
+            [
+                f"{index}. ⚽ {player.name}",
+                f"   ⭐ OVR: {player.overall}",
+                f"   💰 {listing.price:,} Coins",
+                "",
+            ]
         )
 
-    await message.reply_text(text)
+    await message.reply_text(
+        "\n".join(lines)
+    )
 
+
+# ==========================================================
+# HANDLERS
+# ==========================================================
 
 sellplayer_handler = CommandHandler(
     "sellplayer",
