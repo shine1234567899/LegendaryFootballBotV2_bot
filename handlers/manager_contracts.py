@@ -4,6 +4,9 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
+from telegram import Update
+from telegram.ext import CommandHandler, ContextTypes
+
 from database.database import AsyncSessionLocal
 from database.models import (
     Club,
@@ -16,9 +19,23 @@ from database.models import (
 INITIAL_SALARY = 100_000
 INITIAL_DURATION_DAYS = 30
 
+# Daily salary is determined by the player's Overall.
+# Edit these thresholds if you want a different economy.
+SALARY_BY_OVERALL = (
+    (95, 2_000_000),
+    (90, 1_000_000),
+    (85, 500_000),
+    (80, 250_000),
+    (0, 100_000),
+)
+
 
 def initial_contract_salary(player: Player) -> int:
-    """Salary of the automatic first contract."""
+    """Return the automatic daily salary based on Overall."""
+    overall = int(getattr(player, "overall", 0) or 0)
+    for minimum_overall, salary in SALARY_BY_OVERALL:
+        if overall >= minimum_overall:
+            return salary
     return INITIAL_SALARY
 
 
@@ -280,3 +297,81 @@ async def pay_all_due_salaries():
         "left": left,
         "skipped": skipped,
     }
+
+
+async def contracts_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show every current squad player and his active contract."""
+    user = update.effective_user
+    message = update.effective_message
+    if user is None or message is None:
+        return
+
+    async with AsyncSessionLocal() as session:
+        club = await session.scalar(
+            select(Club).where(Club.owner_id == user.id)
+        )
+        if club is None:
+            await message.reply_text("❌ Create your club first.")
+            return
+
+        result = await session.execute(
+            select(ClubPlayer, Player, PlayerContract)
+            .join(Player, Player.id == ClubPlayer.player_id)
+            .outerjoin(
+                PlayerContract,
+                (PlayerContract.club_id == Club.id)
+                & (PlayerContract.player_id == Player.id)
+                & (PlayerContract.active.is_(True)),
+            )
+            .where(
+                ClubPlayer.club_id == club.id,
+                ClubPlayer.is_current.is_(True),
+            )
+            .order_by(Player.overall.desc(), Player.name.asc())
+        )
+        rows = result.all()
+
+    if not rows:
+        await message.reply_text("📭 Your squad has no players.")
+        return
+
+    lines = [
+        "📄 𝐌𝐘 𝐏𝐋𝐀𝐘𝐄𝐑 𝐂𝐎𝐍𝐓𝐑𝐀𝐂𝐓𝐒",
+        "━━━━━━━━━━━━━━━━━━━━",
+        f"🏟️ {club.name}",
+        "",
+    ]
+
+    for _, player, contract in rows:
+        salary = (
+            contract.salary
+            if contract is not None
+            else initial_contract_salary(player)
+        )
+        status = "ACTIVE" if contract is not None else "MISSING"
+
+        lines.append(
+            f"⚽ {player.name} • {player.overall} OVR\n"
+            f"   💰 {salary:,} Coins/day\n"
+            f"   📅 {contract.duration_days if contract else INITIAL_DURATION_DAYS} days\n"
+            f"   🟢 {status}\n"
+        )
+
+    text = "\n".join(lines)
+    if len(text) <= 3900:
+        await message.reply_text(text)
+        return
+
+    current = ""
+    for block in lines:
+        candidate = (current + "\n" + block).strip()
+        if len(candidate) > 3800:
+            await message.reply_text(current)
+            current = block
+        else:
+            current = candidate
+    if current:
+        await message.reply_text(current)
+
+
+contracts_handler = CommandHandler("contracts", contracts_command)

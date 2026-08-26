@@ -142,7 +142,6 @@ from handlers.annonce import (
 )
 from handlers.daily import daily_handler
 from handlers.ref import ref_handler
-from handlers.sanction import sanction_handler
 from handlers.leagueids import leagueids_handler
 from handlers.command import command_handler
 from handlers.commandrank import commandrank_handler
@@ -181,6 +180,7 @@ from handlers.manager_sponsors import (
     pay_all_due_sponsors,
 )
 from handlers.users_owner import users_handler
+from handlers.sanction import sanction_handler, payfine_handler
 
 
 
@@ -196,6 +196,14 @@ async def post_init(
     )
 
     await init_database()
+
+    # Ensure old squads also receive their automatic contracts.
+    try:
+        from handlers.manager_contracts import ensure_all_current_players_have_contracts
+        created_contracts = await ensure_all_current_players_have_contracts()
+        print(f"✅ Automatic contracts checked: {created_contracts} created.")
+    except Exception as error:
+        print(f"⚠️ Automatic contract check failed: {type(error).__name__}: {error}")
 
     print(
         "✅ Database ready."
@@ -263,6 +271,7 @@ async def post_init(
         BotCommand("ballondorwinner", "Set Ballon d'Or winner"),
         BotCommand("clearballondor", "Reset Ballon d'Or"),
         BotCommand("users", "View all bot users"),
+        BotCommand("payfine", "Pay your sanction fine"),
         BotCommand("ballondorhelp", "Ballon d'Or commands"),
     ]
 
@@ -509,7 +518,9 @@ def main():
     application.add_handler(trade_callback_handler)
     application.add_handler(daily_handler)
     application.add_handler(ref_handler)
-    application.add_handler(sanction_handler)
+    # Sanction enforcement MUST run before normal commands.
+    application.add_handler(sanction_handler, group=-100)
+    application.add_handler(payfine_handler, group=-99)
     application.add_handler(leagueids_handler)
 
     # ======================================================

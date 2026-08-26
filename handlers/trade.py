@@ -148,6 +148,17 @@ def _player_keyboard(
     return InlineKeyboardMarkup(rows)
 
 
+
+def _requested_player_keyboard(players):
+    rows = []
+    for _, player in players[:20]:
+        rows.append([InlineKeyboardButton(
+            f"📥 {player.name} • {player.overall}",
+            callback_data=f"trade:request:{player.id}",
+        )])
+    rows.append([InlineKeyboardButton("❌ CLOSE", callback_data="trade:close")])
+    return InlineKeyboardMarkup(rows)
+
 async def trade(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -474,6 +485,66 @@ trade_callback_handler = CallbackQueryHandler(
     trade_callback,
     pattern=(
         r"^trade:"
-        r"(myplayers|offer:\d+|continue|back|close)$"
+        r"(myplayers|offer:\d+|request:\d+|continue|send|back|close)$"
     ),
+)
+
+async def trade_response_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if query is None or not query.data:
+        return
+    parts = str(query.data).split(":")
+    if len(parts) != 3:
+        return
+    action, trade_id_text = parts[1], parts[2]
+    try:
+        trade_id = int(trade_id_text)
+    except ValueError:
+        return
+    await query.answer()
+
+    async with AsyncSessionLocal() as session:
+        trade = await session.get(Trade, trade_id)
+        if trade is None or trade.status != "PENDING":
+            await query.edit_message_text("⚠️ Trade no longer available.")
+            return
+        if query.from_user.id != trade.receiver_id:
+            await query.answer("❌ This trade is not for you.", show_alert=True)
+            return
+
+        if action == "decline":
+            trade.status = "DECLINED"
+            await session.commit()
+            await query.edit_message_text("❌ Trade declined.")
+            return
+
+        sender_club = await _get_user_club(session, trade.sender_id)
+        receiver_club = await _get_user_club(session, trade.receiver_id)
+        offered_ownership = await session.scalar(select(ClubPlayer).where(
+            ClubPlayer.club_id == sender_club.id,
+            ClubPlayer.player_id == trade.offered_player_id,
+            ClubPlayer.is_current.is_(True),
+        ))
+        requested_ownership = await session.scalar(select(ClubPlayer).where(
+            ClubPlayer.club_id == receiver_club.id,
+            ClubPlayer.player_id == trade.requested_player_id,
+            ClubPlayer.is_current.is_(True),
+        ))
+        if offered_ownership is None or requested_ownership is None:
+            trade.status = "CANCELLED"
+            await session.commit()
+            await query.edit_message_text("❌ Trade cancelled: player unavailable.")
+            return
+
+        # Swap ownership in the same transaction.
+        offered_ownership.club_id = receiver_club.id
+        requested_ownership.club_id = sender_club.id
+        trade.status = "ACCEPTED"
+        await session.commit()
+
+    await query.edit_message_text("✅ Trade completed successfully.")
+
+trade_response_handler = CallbackQueryHandler(
+    trade_response_callback,
+    pattern=r"^trade_(accept|decline):\d+$",
 )

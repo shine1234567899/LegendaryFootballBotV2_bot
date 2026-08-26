@@ -3088,65 +3088,37 @@ async def friendlypay_accept_callback(update, context):
     # - create the DB match
     # - load both lineups
     # - start the live engine
-    query.data = f"friendly_accept:{match_id}"
+# CallbackQuery.data is immutable in python-telegram-bot.
+    # Use a small proxy update instead of modifying the Telegram object.
+    class _CallbackDataProxy:
+        def __init__(self, original_query, data):
+            self._original_query = original_query
+            self.data = data
+
+        def __getattr__(self, name):
+            return getattr(self._original_query, name)
+
+    class _UpdateProxy:
+        def __init__(self, original_update, data):
+            self._original_update = original_update
+            self.callback_query = _CallbackDataProxy(
+                original_update.callback_query,
+                data,
+            )
+
+        def __getattr__(self, name):
+            return getattr(self._original_update, name)
+
+    proxy_update = _UpdateProxy(
+        update,
+        f"friendly_accept:{match_id}",
+    )
 
     await friendly_accept_callback(
-        update,
+        proxy_update,
         context,
     )
 
-
-async def friendlypay_decline_callback(update, context):
-    query = update.callback_query
-    if query is None:
-        return
-    try:
-        match_id = str(query.data).split(":", 1)[1]
-    except Exception:
-        return
-    pending = _friendly_pay_store(context).get(match_id)
-    if pending is None:
-        return
-    if query.from_user.id != pending["opponent_id"]:
-        await _safe_query_answer(query, "❌ This offer is not for you.", True)
-        return
-    pending["status"] = "DECLINED"
-    await _safe_query_answer(query, "Offer declined.")
-    await query.edit_message_text("❌ Friendly Pay declined.")
-
-
-async def friendly_forfeit_callback(update, context):
-    query = update.callback_query
-    if query is None:
-        return
-    try:
-        match_id = str(query.data).split(":", 1)[1]
-    except Exception:
-        return
-
-    pending = _friendly_pending_store(context).get(match_id)
-    if pending is None:
-        pending = _friendly_pay_store(context).get(match_id)
-
-    if pending is None:
-        await _safe_query_answer(query, "❌ Match not found.", True)
-        return
-
-    # Forfeit cancels a pending challenge before acceptance.
-    # Only the challenger who created the invitation can use it.
-    if query.from_user.id != pending.get("challenger_id"):
-        await _safe_query_answer(query, "❌ Only the challenger can forfeit this pending match.", True)
-        return
-
-    if pending.get("status") not in {"PENDING", "CHOOSING_STAKE"}:
-        await _safe_query_answer(query, "❌ The match is already accepted/live.", True)
-        return
-
-    pending["status"] = "FORFEITED"
-    await _safe_query_answer(query, "Challenge cancelled.")
-    await query.edit_message_text(
-        "🏳️ 𝐅𝐎𝐑𝐅𝐄𝐈𝐓\n━━━━━━━━━━━━━━━━━━━━\nThe friendly challenge has been cancelled."
-    )
 
 
 # ==========================================================
@@ -3235,6 +3207,163 @@ async def subs_command(
 # ==========================================================
 # FRIENDLY CALLBACK ROUTER
 # ==========================================================
+
+
+async def friendlypay_decline_callback(update, context):
+    """Decline a pending Friendly Pay offer."""
+    query = update.callback_query
+    if query is None:
+        return
+
+    try:
+        await query.answer()
+    except Exception:
+        pass
+
+    try:
+        match_id = str(query.data).split(":", 1)[1]
+    except Exception:
+        await query.edit_message_text("❌ Invalid Friendly Pay offer.")
+        return
+
+    pay_store = _friendly_pay_store(context)
+    pending = pay_store.get(match_id)
+
+    if pending is None:
+        await query.edit_message_text(
+            "❌ This Friendly Pay offer no longer exists."
+        )
+        return
+
+    if query.from_user.id != pending.get("opponent_id"):
+        await query.answer(
+            "❌ This offer is not for you.",
+            show_alert=True,
+        )
+        return
+
+    if pending.get("status") != "PENDING":
+        await query.edit_message_text(
+            "❌ This Friendly Pay offer is no longer available."
+        )
+        return
+
+    pending["status"] = "DECLINED"
+
+    challenger_id = pending.get("challenger_id")
+    try:
+        await context.bot.send_message(
+            chat_id=challenger_id,
+            text=(
+                "❌ 𝐅𝐑𝐈𝐄𝐍𝐃𝐋𝐘 𝐏𝐀𝐘 𝐃𝐄𝐂𝐋𝐈𝐍𝐄𝐃\n"
+                "━━━━━━━━━━━━━━━━━━━━\n"
+                "The opponent declined your Friendly Pay challenge."
+            ),
+        )
+    except Exception:
+        pass
+
+    await query.edit_message_text(
+        "❌ Friendly Pay challenge declined."
+    )
+
+
+async def friendly_forfeit_callback(update, context):
+    """Cancel a pending Friendly/Friendly Pay challenge."""
+    query = update.callback_query
+    if query is None:
+        return
+
+    try:
+        await query.answer()
+    except Exception:
+        pass
+
+    try:
+        match_id = str(query.data).split(":", 1)[1]
+    except Exception:
+        await query.edit_message_text("❌ Invalid challenge.")
+        return
+
+    # Check normal Friendly first, then Friendly Pay.
+    stores = [
+        context.bot_data.get("pending_friendlies", {}),
+        _friendly_pay_store(context),
+    ]
+
+    pending = None
+    store = None
+
+    for candidate in stores:
+        if match_id in candidate:
+            pending = candidate[match_id]
+            store = candidate
+            break
+
+    if pending is None:
+        await query.edit_message_text(
+            "❌ This challenge no longer exists."
+        )
+        return
+
+    if query.from_user.id != pending.get("challenger_id"):
+        await query.answer(
+            "❌ Only the challenger can forfeit this challenge.",
+            show_alert=True,
+        )
+        return
+
+    if pending.get("status") not in ("PENDING", "CHOOSING_STAKE"):
+        await query.answer(
+            "❌ This match has already started.",
+            show_alert=True,
+        )
+        return
+
+    pending["status"] = "CANCELLED"
+    if store is not None:
+        store.pop(match_id, None)
+
+    # If money had already been reserved, return it.
+    stake = int(pending.get("stake") or 0)
+    challenger_stake_taken = bool(
+        pending.get("stake_taken")
+    )
+    opponent_stake_taken = bool(
+        pending.get("opponent_stake_taken")
+    )
+
+    if challenger_stake_taken or opponent_stake_taken:
+        async with AsyncSessionLocal() as session:
+            challenger = await session.get(
+                User,
+                int(pending["challenger_id"]),
+            )
+            opponent = await session.get(
+                User,
+                int(pending["opponent_id"]),
+            )
+
+            if challenger is not None and challenger_stake_taken:
+                challenger.coins = int(challenger.coins or 0) + stake
+
+            if opponent is not None and opponent_stake_taken:
+                opponent.coins = int(opponent.coins or 0) + stake
+
+            await session.commit()
+
+    try:
+        await context.bot.send_message(
+            chat_id=pending["opponent_id"],
+            text="🏳️ The challenger forfeited the challenge.",
+        )
+    except Exception:
+        pass
+
+    await query.edit_message_text(
+        "🏳️ Challenge forfeited successfully."
+    )
+
 
 async def friendly_callback_router(
     update: Update,

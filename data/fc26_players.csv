@@ -302,7 +302,7 @@ Jacob Ramsey,England,MID,25,79,83,22000000,False
 Curtis Jones,England,MID,25,81,84,26000000,False
 Conor Gallagher,England,MID,26,81,83,28000000,False
 Ben Doak,Scotland,ATT,20,78,86,18000000,False
-Tommy Conway,Scotland,ST,24,78,82,12000000,False
+Tommy Conway,Scotland,ATT,24,78,82,12000000,False
 James Trafford,England,GK,23,78,84,14000000,False
 Caoimhin Kelleher,Ireland,GK,27,78,82,11000000,False
 Gavin Bazunu,Ireland,GK,24,78,83,12000000,False
@@ -319,8 +319,8 @@ Djed Spence,England,DEF,26,79,83,16000000,False
 Malo Gusto,France,DEF,23,82,86,32000000,False
 Warren Zaïre-Emery,France,MID,20,84,90,65000000,False
 Bradley Barcola,France,ATT,23,84,88,52000000,False
-Hugo Ekitiké,France,ST,24,82,86,36000000,False
-Mathys Tel,France,ST,21,78,86,22000000,False
+Hugo Ekitiké,France,ATT,24,82,86,36000000,False
+Mathys Tel,France,ATT,21,78,86,22000000,False
 Manu Koné,France,MID,25,82,85,32000000,False
 Khéphren Thuram,France,MID,25,81,84,24000000,False
 Boubacar Kamara,France,MID,26,80,83,20000000,False
@@ -330,21 +330,21 @@ Jean-Clair Todibo,France,DEF,26,78,82,16000000,False
 Loïc Badé,France,DEF,26,79,82,15000000,False
 Adrien Truffert,France,DEF,24,78,83,14000000,False
 Lucas Beraldo,Brazil,DEF,22,79,85,19000000,False
-Brian Brobbey,Netherlands,ST,24,80,84,24000000,False
-Joshua Zirkzee,Netherlands,ST,25,79,84,22000000,False
+Brian Brobbey,Netherlands,ATT,24,80,84,24000000,False
+Joshua Zirkzee,Netherlands,ATT,25,79,84,22000000,False
 Yankuba Minteh,Gambia,ATT,21,79,86,22000000,False
 Mats Rits,Belgium,MID,33,78,78,5000000,False
 Aster Vranckx,Belgium,MID,23,78,83,14000000,False
 Mario Stroeykens,Belgium,MID,21,78,85,17000000,False
 Dodi Lukebakio,Belgium,ATT,28,81,82,16000000,False
-Loïs Openda,Belgium,ST,26,84,87,50000000,False
+Loïs Openda,Belgium,ATT,26,84,87,50000000,False
 Charles De Ketelaere,Belgium,ATT,25,82,85,30000000,False
 Nico Paz,Argentina,MID,21,82,89,45000000,False
 Valentín Carboni,Argentina,ATT,21,78,86,18000000,False
 Giovani Lo Celso,Argentina,MID,30,80,80,11000000,False
 Enzo Barrenechea,Argentina,MID,25,78,83,13000000,False
 Estêvão,Brazil,ATT,19,80,90,50000000,False
-João Pedro,Brazil,ST,24,82,86,35000000,False
+João Pedro,Brazil,ATT,24,82,86,35000000,False
 Igor Paixão,Brazil,ATT,25,80,84,24000000,False
 João Gomes,Brazil,MID,25,81,84,26000000,False
 Gabriel Magalhães,Brazil,DEF,28,85,86,45000000,False
@@ -372,7 +372,7 @@ Arnau Martínez,Spain,DEF,23,79,84,17000000,False
 Gavi,Spain,MID,21,83,89,50000000,False
 Kenan Yıldız,Turkey,ATT,21,81,89,45000000,False
 Arda Güler,Turkey,MID,21,82,89,50000000,False
-Semih Kılıçsoy,Turkey,ST,21,79,87,18000000,False
+Semih Kılıçsoy,Turkey,ATT,21,79,87,18000000,False
 İsmail Yüksek,Turkey,MID,27,78,82,10000000,False
 Orkun Kökçü,Turkey,MID,25,83,86,30000000,False
 Yunus Akgün,Turkey,ATT,25,79,84,16000000,False
@@ -381,8 +381,8 @@ Abdülkerim Bardakcı,Turkey,DEF,31,78,79,7000000,False
 Matías Soulé,Argentina,ATT,23,80,86,28000000,False
 Lorenzo Pellegrini,Italy,MID,30,82,82,15000000,False
 Giacomo Raspadori,Italy,ATT,26,79,82,15000000,False
-Moise Kean,Italy,ST,26,82,84,22000000,False
-Gianluca Scamacca,Italy,ST,27,81,83,20000000,False
+Moise Kean,Italy,ATT,26,82,84,22000000,False
+Gianluca Scamacca,Italy,ATT,27,81,83,20000000,False
 Riccardo Orsolini,Italy,ATT,29,82,82,15000000,False
 Federico Chiesa,Italy,ATT,28,83,84,26000000,False
 Destiny Udogie,Italy,DEF,23,83,87,35000000,False
@@ -396,19 +396,19 @@ Gustav Isaksen,Denmark,ATT,25,80,84,18000000,False
 Matt O'Riley,Denmark,MID,25,80,84,19000000,False
 Victor Kristiansen,Denmark,DEF,23,78,82,13000000,False
 Joachim Andersen,Denmark,DEF,30,82,82,12000000,False
-Rasmus Højlund,Denmark,ST,23,81,86,32000000,False
+Rasmus Højlund,Denmark,ATT,23,81,86,32000000,False
 Patrick Wimmer,Austria,ATT,25,79,83,16000000,False
 Konrad Laimer,Austria,MID,29,81,82,15000000,False
 Nicolas Seiwald,Austria,MID,25,78,83,13000000,False
 Kevin Danso,Austria,DEF,27,80,82,14000000,False
 Max Wöber,Austria,DEF,28,78,80,9000000,False
-Youssoufa Moukoko,Germany,ST,21,78,84,12000000,False
+Youssoufa Moukoko,Germany,ATT,21,78,84,12000000,False
 Assan Ouédraogo,Germany,MID,20,78,87,18000000,False
-Benjamin Šeško,Slovenia,ST,23,84,89,55000000,False
+Benjamin Šeško,Slovenia,ATT,23,84,89,55000000,False
 Luka Sučić,Croatia,MID,23,80,86,22000000,False
 Josip Stanišić,Croatia,DEF,26,81,84,22000000,False
 Joško Gvardiol,Croatia,DEF,24,86,89,60000000,False
-Vladyslav Vanat,Ukraine,ST,24,78,84,14000000,False
+Vladyslav Vanat,Ukraine,ATT,24,78,84,14000000,False
 Georgiy Sudakov,Ukraine,MID,23,82,87,32000000,False
 Mykhailo Mudryk,Ukraine,ATT,25,80,85,20000000,False
 Oleksandr Zinchenko,Ukraine,MID,29,81,81,12000000,False
@@ -429,24 +429,24 @@ Noussair Mazraoui,Morocco,DEF,28,81,82,13000000,False
 Ismael Saibari,Morocco,MID,25,79,84,18000000,False
 Pape Matar Sarr,Senegal,MID,23,80,85,23000000,False
 Iliman Ndiaye,Senegal,ATT,26,80,82,14000000,False
-Nicolas Jackson,Senegal,ST,25,82,86,30000000,False
+Nicolas Jackson,Senegal,ATT,25,82,86,30000000,False
 Lamine Camara,Senegal,MID,22,79,86,19000000,False
 El Hadji Malick Diouf,Senegal,DEF,21,78,85,17000000,False
 Seko Fofana,Ivory Coast,MID,31,80,80,7000000,False
-Oumar Diakité,Ivory Coast,ST,22,78,83,12000000,False
+Oumar Diakité,Ivory Coast,ATT,22,78,83,12000000,False
 Simon Adingra,Ivory Coast,ATT,24,80,85,18000000,False
 Amad Diallo,Ivory Coast,ATT,24,82,88,30000000,False
 Wilfried Singo,Ivory Coast,DEF,25,80,83,15000000,False
 Franck Kessié,Ivory Coast,MID,29,82,82,13000000,False
 Abdoulaye Doucouré,Mali,MID,33,78,78,4000000,False
 Yves Bissouma,Mali,MID,30,80,81,10000000,False
-El Bilal Touré,Mali,ST,25,78,82,12000000,False
+El Bilal Touré,Mali,ATT,25,78,82,12000000,False
 Kamory Doumbia,Mali,MID,23,78,84,14000000,False
 Moussa Diaby,France,ATT,27,82,84,26000000,False
 Moussa Niakhaté,Senegal,DEF,30,79,80,9000000,False
 Ismaila Sarr,Senegal,ATT,28,80,81,12000000,False
-Famara Diédhiou,Senegal,ST,33,78,78,4000000,False
-Serhou Guirassy,Guinea,ST,30,87,87,28000000,False
+Famara Diédhiou,Senegal,ATT,33,78,78,4000000,False
+Serhou Guirassy,Guinea,ATT,30,87,87,28000000,False
 Ibrahim Sangaré,Ivory Coast,MID,28,80,82,12000000,False
 Wilfried Gnonto,Italy,ATT,22,79,86,18000000,False
 André Onana,Cameroon,GK,30,82,83,16000000,False
@@ -464,19 +464,19 @@ Koki Machida,Japan,DEF,28,78,81,9000000,False
 Hwang Hee-chan,South Korea,ATT,30,81,82,14000000,False
 Kim Min-jae,South Korea,DEF,30,84,85,30000000,False
 Lee Kang-in,South Korea,MID,25,82,85,30000000,False
-Cho Gue-sung,South Korea,ST,28,78,80,8000000,False
+Cho Gue-sung,South Korea,ATT,28,78,80,8000000,False
 Kerem Aktürkoğlu,Turkey,ATT,27,82,84,18000000,False
 Barış Alper Yılmaz,Turkey,ATT,26,82,86,30000000,False
 Salih Özcan,Turkey,MID,28,78,80,9000000,False
 Lucas Paquetá,Brazil,MID,29,82,83,22000000,False
 Malcom,Brazil,ATT,29,80,81,13000000,False
 Perr Schuurs,Netherlands,DEF,26,78,82,13000000,False
-Santiago Giménez,Mexico,ST,25,83,86,35000000,False
+Santiago Giménez,Mexico,ATT,25,83,86,35000000,False
 Edson Álvarez,Mexico,MID,28,82,83,18000000,False
 Johan Vásquez,Mexico,DEF,28,79,81,10000000,False
 Orbelín Pineda,Mexico,MID,30,78,79,6000000,False
 Hirving Lozano,Mexico,ATT,31,79,79,7000000,False
-Jonathan David,Canada,ST,26,86,88,50000000,False
+Jonathan David,Canada,ATT,26,86,88,50000000,False
 Tajon Buchanan,Canada,ATT,27,79,82,12000000,False
 Alphonso Davies,Canada,DEF,25,85,88,55000000,False
 Stephen Eustáquio,Canada,MID,29,79,81,10000000,False
@@ -484,18 +484,18 @@ Tim Weah,USA,ATT,26,80,82,14000000,False
 Leandro Paredes,Argentina,MID,31,79,79,6000000,False
 Nicolás González,Argentina,ATT,28,82,83,20000000,False
 Giuliano Simeone,Argentina,ATT,23,79,85,18000000,False
-Lucas Stassin,Belgium,ST,21,78,84,14000000,False
+Lucas Stassin,Belgium,ATT,21,78,84,14000000,False
 Kjell Peersman,Belgium,GK,21,78,84,9000000,False
 Rocco Reitz,Germany,MID,24,78,84,13000000,False
-Paris Brunner,Germany,ST,20,78,87,17000000,False
+Paris Brunner,Germany,ATT,20,78,87,17000000,False
 Kacper Kozłowski,Poland,MID,22,78,84,13000000,False
 Jakub Kamiński,Poland,ATT,24,79,83,12000000,False
 Mariusz Fornalczyk,Poland,ATT,23,78,84,11000000,False
-Samu Omorodion,Spain,ST,22,82,88,36000000,False
-Marc Guiu,Spain,ST,20,78,86,17000000,False
+Samu Omorodion,Spain,ATT,22,82,88,36000000,False
+Marc Guiu,Spain,ATT,20,78,86,17000000,False
 Abu Kamara,England,ATT,22,78,84,11000000,False
-Tom Cannon,Ireland,ST,24,78,82,10000000,False
+Tom Cannon,Ireland,ATT,24,78,82,10000000,False
 Luka Vušković,Croatia,DEF,19,78,88,16000000,False
 Igor Julio,Brazil,DEF,28,79,80,9000000,False
 Ismaël Doukouré,France,DEF,22,78,84,12000000,False
-Désiré Azankpo,Benin,ST,23,78,82,9000000,False
+Désiré Azankpo,Benin,ATT,23,78,82,9000000,False

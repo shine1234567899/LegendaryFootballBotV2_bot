@@ -5,10 +5,11 @@ from pathlib import Path
 
 from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes
+from sqlalchemy import select
 
 from config import OWNER_IDS
 from database.database import AsyncSessionLocal
-from database.models import GameSetting
+from database.models import GameSetting, User
 
 
 IMAGE_FILE = (
@@ -18,160 +19,169 @@ IMAGE_FILE = (
 )
 
 
-# ==========================================================
-# SANCTION
-# ==========================================================
-#
-# Owner-only command.
-#
-# The current database model does not expose a dedicated
-# sanctions table/fields in the files provided so far.
-# Therefore this command stores sanctions in GameSetting
-# without changing the existing User/Club schema.
-#
-# Usage:
-#
-# /sanction <user_id> <reason>
-#
-# Example:
-# /sanction 123456789 cheating
-#
-# This creates/updates:
-#   sanction:<user_id>
-#
-# Stored value:
-#   ISO timestamp | reason
-#
-# This is intentionally a recording system. Enforcement
-# (blocking commands/matches/etc.) can be connected later.
-# ==========================================================
-
-
-async def _get_setting(
-    session,
-    key: str,
-):
-    from sqlalchemy import select
-
+async def _get_setting(session, key: str):
     result = await session.execute(
-        select(GameSetting).where(
-            GameSetting.key == key
-        )
+        select(GameSetting).where(GameSetting.key == key)
     )
-
     return result.scalar_one_or_none()
 
 
-async def sanction(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-):
+async def sanction(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.effective_message
-    user = update.effective_user
+    owner = update.effective_user
 
-    if (
-        message is None
-        or user is None
-    ):
+    if message is None or owner is None:
         return
 
-    # OWNER ONLY
-    if user.id not in OWNER_IDS:
-        await message.reply_text(
-            "⛔ This command is Owner only."
-        )
+    if owner.id not in OWNER_IDS:
+        await message.reply_text("⛔ This command is Owner only.")
         return
 
+    # /sanction <user_id> <amount> <reason>
     if len(context.args) < 2:
         await message.reply_text(
-            (
-                "⚠️ 𝐒𝐀𝐍𝐂𝐓𝐈𝐎𝐍\n"
-                "━━━━━━━━━━━━━━━━━━━━\n"
-                "Usage:\n"
-                "/sanction <user_id> <reason>\n\n"
-                "Example:\n"
-                "/sanction 123456789 cheating"
-            )
+            "⚠️ Usage:\n/sanction <user_id> <amount> [reason]\n\n"
+            "Example:\n/sanction 123456789 50000 cheating"
         )
         return
 
     try:
-        target_user_id = int(
-            context.args[0]
-        )
+        target_id = int(context.args[0])
+        amount = int(context.args[1])
     except ValueError:
-        await message.reply_text(
-            "❌ Invalid user ID."
-        )
+        await message.reply_text("❌ User ID and amount must be numbers.")
         return
 
-    reason = " ".join(
-        context.args[1:]
-    ).strip()
-
-    if not reason:
-        await message.reply_text(
-            "❌ A reason is required."
-        )
+    if amount <= 0:
+        await message.reply_text("❌ The fine must be greater than 0.")
         return
 
-    now = datetime.now(
-        timezone.utc
-    )
-
-    key = f"sanction:{target_user_id}"
+    reason = " ".join(context.args[2:]).strip() or "No reason specified"
+    now = datetime.now(timezone.utc)
 
     async with AsyncSessionLocal() as session:
-        setting = await _get_setting(
-            session,
-            key,
-        )
+        target = await session.get(User, target_id)
+        if target is None:
+            await message.reply_text("❌ User not found.")
+            return
 
-        value = (
-            f"{now.isoformat()} | {reason}"
-        )
+        key = f"sanction:{target_id}"
+        setting = await _get_setting(session, key)
+        value = f"{amount}|{reason}|{now.isoformat()}"
 
         if setting is None:
-            setting = GameSetting(
+            session.add(GameSetting(
                 key=key,
                 value=value,
-                description="Owner sanction record.",
-            )
-            session.add(setting)
+                description="Active owner fine; all commands blocked until paid.",
+            ))
         else:
             setting.value = value
 
         await session.commit()
 
-    if IMAGE_FILE.exists():
-        await message.reply_photo(
-            photo=open(
-                IMAGE_FILE,
-                "rb",
-            ),
-            caption=(
-                "🔨 𝐒𝐀𝐍𝐂𝐓𝐈𝐎𝐍\n"
+    # Notify the sanctioned user in DM.
+    try:
+        await context.bot.send_message(
+            chat_id=target_id,
+            text=(
+                "🔨 𝐘𝐎𝐔 𝐇𝐀𝐕𝐄 𝐁𝐄𝐄𝐍 𝐒𝐀𝐍𝐂𝐓𝐈𝐎𝐍𝐄𝐃\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
-                f"👤 User ID : {target_user_id}\n"
-                f"📝 Reason : {reason}\n"
-                f"🕒 Date : "
-                f"{now.strftime('%d/%m/%Y %H:%M UTC')}\n\n"
-                "✅ Sanction recorded."
+                f"💰 Fine: {amount:,} Coins\n"
+                f"📝 Reason: {reason}\n\n"
+                "🚫 Your bot commands are blocked.\n"
+                "💳 Pay your fine to restore access."
             ),
         )
-    else:
-        await message.reply_text(
-            (
-                "🔨 𝐒𝐀𝐍𝐂𝐓𝐈𝐎𝐍\n"
-                "━━━━━━━━━━━━━━━━━━━━\n"
-                f"👤 User ID : {target_user_id}\n"
-                f"📝 Reason : {reason}\n"
-                "✅ Sanction recorded."
+    except Exception:
+        pass
+
+    await message.reply_text(
+        f"✅ Sanction applied to {target_id}.\n"
+        f"💰 Fine: {amount:,} Coins\n"
+        f"📝 Reason: {reason}\n"
+        "🚫 Commands blocked until payment."
+    )
+
+
+async def payfine(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    message = update.effective_message
+    if user is None or message is None:
+        return
+
+    key = f"sanction:{user.id}"
+
+    async with AsyncSessionLocal() as session:
+        setting = await _get_setting(session, key)
+        if setting is None:
+            await message.reply_text("✅ You have no active fine.")
+            return
+
+        try:
+            amount_str, reason, created_at = setting.value.split("|", 2)
+            amount = int(amount_str)
+        except Exception:
+            await message.reply_text("❌ Your sanction record is invalid.")
+            return
+
+        target = await session.get(User, user.id)
+        if target is None:
+            await message.reply_text("❌ User account not found.")
+            return
+
+        if int(target.coins or 0) < amount:
+            await message.reply_text(
+                f"❌ Not enough Coins.\n"
+                f"💰 Fine: {amount:,}\n"
+                f"💵 Your balance: {int(target.coins or 0):,}"
             )
-        )
+            return
+
+        target.coins -= amount
+        await session.delete(setting)
+        await session.commit()
+
+    await message.reply_text(
+        "✅ 𝐅𝐈𝐍𝐄 𝐏𝐀𝐈𝐃\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"💰 Paid: {amount:,} Coins\n"
+        "🔓 Your bot access has been restored."
+    )
 
 
-sanction_handler = CommandHandler(
-    "sanction",
-    sanction,
-)
+async def sanction_guard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Block commands for sanctioned users, except /payfine."""
+    user = update.effective_user
+    message = update.effective_message
+    if user is None or message is None:
+        return
+
+    if not message.text or not message.text.startswith("/"):
+        return
+
+    command = message.text.split()[0].split("@", 1)[0].lower()
+    if command in ("/payfine", "/sanction"):
+        return
+
+    async with AsyncSessionLocal() as session:
+        setting = await _get_setting(session, f"sanction:{user.id}")
+
+    if setting is None:
+        return
+
+    try:
+        amount, reason, _ = setting.value.split("|", 2)
+    except Exception:
+        amount = "unknown"
+
+    await message.reply_text(
+        "🚫 𝐀𝐂𝐂𝐄𝐒𝐒 𝐁𝐋𝐎𝐂𝐊𝐄𝐃\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"💰 Fine due: {amount} Coins\n"
+        "💳 Use /payfine to pay your fine."
+    )
+
+
+sanction_handler = CommandHandler("sanction", sanction)
+payfine_handler = CommandHandler("payfine", payfine)
