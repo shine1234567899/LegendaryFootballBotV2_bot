@@ -2963,12 +2963,137 @@ async def friendlypay_amount_callback(update, context):
 
 
 async def friendlypay_accept_callback(update, context):
-    # Reuse the same secure acceptance flow.
+    """
+    Accept a Friendly Pay offer and hand it to the normal Friendly
+    acceptance flow.
+
+    Friendly Pay stores its pending offer in `friendly_pay_pending`,
+    while `friendly_accept_callback()` reads `pending_friendlies`.
+    The old adapter only changed query.data, so the normal callback
+    could never find the offer.
+
+    We deliberately DO NOT debit coins here. The normal
+    `friendly_accept_callback()` performs the balance check and the
+    atomic debit exactly once.
+    """
     query = update.callback_query
+
     if query is None:
         return
-    query.data = f"friendly_accept:{str(query.data).split(':', 1)[1]}"
-    await friendly_accept_callback(update, context)
+
+    try:
+        match_id = str(query.data).split(":", 1)[1]
+    except Exception:
+        await _safe_query_answer(
+            query,
+            "❌ Invalid Friendly Pay offer.",
+            True,
+        )
+        return
+
+    pay_store = _friendly_pay_store(context)
+    pending = pay_store.get(match_id)
+
+    if pending is None:
+        await _safe_query_answer(
+            query,
+            "❌ Friendly Pay offer no longer exists.",
+            True,
+        )
+        return
+
+    if pending.get("status") != "PENDING":
+        await _safe_query_answer(
+            query,
+            "❌ This Friendly Pay offer is no longer available.",
+            True,
+        )
+        return
+
+    if query.from_user.id != pending.get("opponent_id"):
+        await _safe_query_answer(
+            query,
+            "❌ This offer is not for you.",
+            True,
+        )
+        return
+
+    stake = int(pending.get("stake") or 0)
+
+    if stake <= 0:
+        await _safe_query_answer(
+            query,
+            "❌ Invalid Friendly Pay stake.",
+            True,
+        )
+        return
+
+    # Verify the challenger still has enough coins before moving the
+    # offer into the normal Friendly flow. The actual debit is done
+    # only once by friendly_accept_callback().
+    async with AsyncSessionLocal() as session:
+        challenger = await session.get(
+            User,
+            int(pending["challenger_id"]),
+        )
+        opponent = await session.get(
+            User,
+            int(pending["opponent_id"]),
+        )
+
+        if challenger is None or opponent is None:
+            await _safe_query_answer(
+                query,
+                "❌ User account not found.",
+                True,
+            )
+            return
+
+        if int(challenger.coins or 0) < stake:
+            pending["status"] = "CANCELLED"
+            await _safe_query_answer(
+                query,
+                "❌ Challenger no longer has enough coins.",
+                True,
+            )
+            try:
+                await query.edit_message_text(
+                    "❌ Friendly Pay cancelled: insufficient challenger balance."
+                )
+            except Exception:
+                pass
+            return
+
+        if int(opponent.coins or 0) < stake:
+            await _safe_query_answer(
+                query,
+                "❌ You don't have enough coins.",
+                True,
+            )
+            return
+
+    # IMPORTANT: friendly_accept_callback() reads this store.
+    # Copy the exact same pending object so all Friendly Pay fields
+    # (stake, challenger, opponent, etc.) are preserved.
+    pending_store = _friendly_pending_store(context)
+    pending_store[match_id] = pending
+
+    # Remove the duplicate source entry. The active match will now be
+    # owned by the normal Friendly lifecycle.
+    pay_store.pop(match_id, None)
+
+    # Reuse the normal secure acceptance flow. It will:
+    # - verify the opponent again
+    # - debit BOTH stakes exactly once
+    # - create the DB match
+    # - load both lineups
+    # - start the live engine
+    query.data = f"friendly_accept:{match_id}"
+
+    await friendly_accept_callback(
+        update,
+        context,
+    )
 
 
 async def friendlypay_decline_callback(update, context):

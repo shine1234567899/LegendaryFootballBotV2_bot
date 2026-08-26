@@ -180,6 +180,7 @@ from handlers.manager_contracts import (
 from handlers.manager_sponsors import (
     pay_all_due_sponsors,
 )
+from handlers.users_owner import users_handler
 
 
 
@@ -261,6 +262,7 @@ async def post_init(
         BotCommand("ballondororder", "Set Ballon d'Or ranking"),
         BotCommand("ballondorwinner", "Set Ballon d'Or winner"),
         BotCommand("clearballondor", "Reset Ballon d'Or"),
+        BotCommand("users", "View all bot users"),
         BotCommand("ballondorhelp", "Ballon d'Or commands"),
     ]
 
@@ -538,6 +540,7 @@ def main():
     application.add_handler(sendplayer_handler)
 
     application.add_handler(addcoins_handler)
+    application.add_handler(users_handler)
 
     # ======================================================
     # MANAGER — CONTRACTS / PLAYER SALES
