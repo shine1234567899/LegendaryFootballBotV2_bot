@@ -3,45 +3,20 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    CommandHandler,
-    CallbackQueryHandler,
-    ContextTypes,
-)
+from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes
 from sqlalchemy import select
 
 from database.database import AsyncSessionLocal
 from database.models import User
 
 
-# ==========================================================
-# PAY
-# ==========================================================
-#
-# /pay @username amount
-#
-# Transfers game coins from the current user to another user.
-#
-# Example:
-#   /pay @shine 5000000
-#
-# Rules:
-#   - amount must be positive
-#   - sender cannot pay himself
-#   - sender must have enough coins
-#   - recipient must already exist
-#   - confirmation button is required
-#
-# Coins only. Gems and player ownership are untouched.
-# ==========================================================
-
-
 PAY_CONFIRM_PREFIX = "pay:confirm"
 PAY_CANCEL_PREFIX = "pay:cancel"
+CURRENCIES = {"coins": "coins", "gems": "gems"}
 
 
 def _format_amount(amount: int) -> str:
-    return f"{amount:,}"
+    return f"{int(amount or 0):,}"
 
 
 def _confirm_keyboard():
@@ -62,11 +37,7 @@ def _confirm_keyboard():
 
 
 def _parse_amount(raw: str) -> int | None:
-    cleaned = (
-        raw.replace(",", "")
-        .replace("_", "")
-        .strip()
-    )
+    cleaned = raw.replace(",", "").replace("_", "").strip()
 
     try:
         value = Decimal(cleaned)
@@ -79,72 +50,61 @@ def _parse_amount(raw: str) -> int | None:
     return int(value)
 
 
-async def _get_user_by_id(
-    session,
-    user_id: int,
-):
+async def _get_user_by_id(session, user_id: int):
     result = await session.execute(
-        select(User).where(
-            User.id == user_id
-        )
+        select(User).where(User.id == user_id)
     )
     return result.scalar_one_or_none()
 
 
-async def _get_user_by_username(
-    session,
-    username: str,
-):
+async def _get_user_by_username(session, username: str):
     username = username.strip().lstrip("@")
 
     if not username:
         return None
 
     result = await session.execute(
-        select(User).where(
-            User.username.ilike(username)
-        )
+        select(User).where(User.username.ilike(username))
     )
     return result.scalar_one_or_none()
 
 
-async def pay(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-):
+async def pay(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     message = update.effective_message
 
     if user is None or message is None:
         return
 
-    if len(context.args) != 2:
+    if len(context.args) != 3:
         await message.reply_text(
-            (
-                "💸 𝐏𝐀𝐘\n"
-                "━━━━━━━━━━━━━━━━━━━━\n"
-                "Usage:\n"
-                "/pay @username amount\n\n"
-                "Example:\n"
-                "/pay @manager 5000000"
-            )
+            "💸 𝐏𝐀𝐘\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "Usage:\n"
+            "/pay @username coins amount\n"
+            "/pay @username gems amount\n\n"
+            "Examples:\n"
+            "/pay @manager coins 5000000\n"
+            "/pay @manager gems 500"
         )
         return
 
     recipient_input = context.args[0]
-    amount = _parse_amount(context.args[1])
+    currency = context.args[1].lower().strip()
+    amount = _parse_amount(context.args[2])
 
-    if amount is None:
-        await message.reply_text(
-            "❌ Invalid amount."
-        )
+    if currency not in CURRENCIES:
+        await message.reply_text("❌ Currency must be coins or gems.")
         return
 
+    if amount is None:
+        await message.reply_text("❌ Invalid amount.")
+        return
+
+    balance_field = CURRENCIES[currency]
+
     async with AsyncSessionLocal() as session:
-        sender = await _get_user_by_id(
-            session,
-            user.id,
-        )
+        sender = await _get_user_by_id(session, user.id)
 
         if sender is None:
             await message.reply_text(
@@ -158,55 +118,46 @@ async def pay(
         )
 
         if recipient is None:
-            await message.reply_text(
-                "❌ Recipient not found."
-            )
+            await message.reply_text("❌ Recipient not found.")
             return
 
         if recipient.id == sender.id:
-            await message.reply_text(
-                "❌ You cannot pay yourself."
-            )
+            await message.reply_text("❌ You cannot pay yourself.")
             return
 
-        if sender.coins < amount:
+        sender_balance = int(
+            getattr(sender, balance_field, 0) or 0
+        )
+
+        if sender_balance < amount:
             await message.reply_text(
-                (
-                    "❌ Insufficient coins.\n\n"
-                    f"💰 Your balance: "
-                    f"{_format_amount(sender.coins)}\n"
-                    f"💸 Requested: "
-                    f"{_format_amount(amount)}"
-                )
+                "❌ Insufficient balance.\n\n"
+                f"💰 Your balance: "
+                f"{_format_amount(sender_balance)} {currency}\n"
+                f"💸 Requested: "
+                f"{_format_amount(amount)} {currency}"
             )
             return
 
         recipient_name = (
             f"@{recipient.username}"
             if recipient.username
-            else (
-                recipient.first_name
-                or f"User #{recipient.id}"
-            )
+            else (recipient.first_name or f"User #{recipient.id}")
         )
 
-        # Store the transaction temporarily in the user's
-        # context until the confirmation callback is pressed.
         context.user_data["pending_pay"] = {
             "recipient_id": recipient.id,
             "amount": amount,
+            "currency": currency,
             "recipient_name": recipient_name,
         }
 
     await message.reply_text(
-        (
-            "💸 𝐂𝐎𝐍𝐅𝐈𝐑𝐌 𝐏𝐀𝐘𝐌𝐄𝐍𝐓\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            f"👤 To : {recipient_name}\n"
-            f"💰 Amount : {_format_amount(amount)} coins\n\n"
-            "Your coins will be transferred only after "
-            "you confirm."
-        ),
+        "💸 𝐂𝐎𝐍𝐅𝐈𝐑𝐌 𝐏𝐀𝐘𝐌𝐄𝐍𝐓\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 To : {recipient_name}\n"
+        f"💰 Amount : {_format_amount(amount)} {currency}\n\n"
+        "Your balance will be transferred only after you confirm.",
         reply_markup=_confirm_keyboard(),
     )
 
@@ -231,21 +182,14 @@ async def pay_callback(
         return
 
     if action[1] == "cancel":
-        context.user_data.pop(
-            "pending_pay",
-            None,
-        )
-        await query.edit_message_text(
-            "❌ Payment cancelled."
-        )
+        context.user_data.pop("pending_pay", None)
+        await query.edit_message_text("❌ Payment cancelled.")
         return
 
     if action[1] != "confirm":
         return
 
-    pending = context.user_data.get(
-        "pending_pay"
-    )
+    pending = context.user_data.get("pending_pay")
 
     if not pending:
         await query.edit_message_text(
@@ -253,12 +197,16 @@ async def pay_callback(
         )
         return
 
-    recipient_id = int(
-        pending["recipient_id"]
-    )
-    amount = int(
-        pending["amount"]
-    )
+    recipient_id = int(pending["recipient_id"])
+    amount = int(pending["amount"])
+    currency = str(pending.get("currency", "coins")).lower()
+
+    if currency not in CURRENCIES:
+        await query.edit_message_text("❌ Invalid currency.")
+        context.user_data.pop("pending_pay", None)
+        return
+
+    balance_field = CURRENCIES[currency]
 
     async with AsyncSessionLocal() as session:
         sender = await _get_user_by_id(
@@ -274,66 +222,64 @@ async def pay_callback(
             await query.edit_message_text(
                 "❌ Payment could not be completed."
             )
-            context.user_data.pop(
-                "pending_pay",
-                None,
-            )
+            context.user_data.pop("pending_pay", None)
             return
 
         if sender.id == recipient.id:
             await query.edit_message_text(
                 "❌ You cannot pay yourself."
             )
-            context.user_data.pop(
-                "pending_pay",
-                None,
-            )
+            context.user_data.pop("pending_pay", None)
             return
 
-        # Re-check the balance at confirmation time.
-        if sender.coins < amount:
+        sender_balance = int(
+            getattr(sender, balance_field, 0) or 0
+        )
+
+        if sender_balance < amount:
             await query.edit_message_text(
-                (
-                    "❌ Insufficient coins.\n"
-                    "Your balance changed before confirmation."
-                )
+                "❌ Insufficient balance.\n"
+                "Your balance changed before confirmation."
             )
-            context.user_data.pop(
-                "pending_pay",
-                None,
-            )
+            context.user_data.pop("pending_pay", None)
             return
 
-        sender.coins -= amount
-        recipient.coins += amount
+        recipient_balance = int(
+            getattr(recipient, balance_field, 0) or 0
+        )
+
+        setattr(
+            sender,
+            balance_field,
+            sender_balance - amount,
+        )
+        setattr(
+            recipient,
+            balance_field,
+            recipient_balance + amount,
+        )
 
         await session.commit()
 
-    context.user_data.pop(
-        "pending_pay",
-        None,
-    )
+        new_balance = int(
+            getattr(sender, balance_field, 0) or 0
+        )
 
-    recipient_name = pending[
-        "recipient_name"
-    ]
+    context.user_data.pop("pending_pay", None)
+
+    recipient_name = pending["recipient_name"]
 
     await query.edit_message_text(
-        (
-            "✅ 𝐏𝐀𝐘𝐌𝐄𝐍𝐓 𝐂𝐎𝐌𝐏𝐋𝐄𝐓𝐄\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            f"👤 To : {recipient_name}\n"
-            f"💰 Sent : {_format_amount(amount)} coins\n"
-            f"💰 Your new balance : "
-            f"{_format_amount(sender.coins)} coins"
-        )
+        "✅ 𝐏𝐀𝐘𝐌𝐄𝐍𝐓 𝐂𝐎𝐌𝐏𝐋𝐄𝐓𝐄\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 To : {recipient_name}\n"
+        f"💰 Sent : {_format_amount(amount)} {currency}\n"
+        f"💰 Your new balance : "
+        f"{_format_amount(new_balance)} {currency}"
     )
 
 
-pay_handler = CommandHandler(
-    "pay",
-    pay,
-)
+pay_handler = CommandHandler("pay", pay)
 
 pay_callback_handler = CallbackQueryHandler(
     pay_callback,

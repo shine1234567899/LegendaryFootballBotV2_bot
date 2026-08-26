@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import BigInteger, DateTime, ForeignKey, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -255,6 +255,64 @@ class ClubPlayer(Base):
     club: Mapped["Club"] = relationship()
 
     player: Mapped["Player"] = relationship()
+# ==========================================================
+# PLAYER CONTRACT
+# ==========================================================
+
+class PlayerContract(Base):
+    __tablename__ = "player_contracts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    club_id: Mapped[int] = mapped_column(
+        ForeignKey("clubs.id"),
+        nullable=False,
+    )
+
+    player_id: Mapped[int] = mapped_column(
+        ForeignKey("players.id"),
+        nullable=False,
+    )
+
+    salary: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+        default=100_000,
+    )
+
+    duration_days: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=30,
+    )
+
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc) + timedelta(days=30),
+    )
+
+    last_paid_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+    )
+
+    club: Mapped["Club"] = relationship()
+    player: Mapped["Player"] = relationship()
+
+
 # ==========================================================
 # SAVED LINEUP
 # ==========================================================

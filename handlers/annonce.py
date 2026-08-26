@@ -1,4 +1,9 @@
+from __future__ import annotations
+
+import asyncio
+
 from telegram import Update
+from telegram.error import BadRequest, Forbidden, NetworkError, TelegramError
 from telegram.ext import (
     CommandHandler,
     ContextTypes,
@@ -6,190 +11,30 @@ from telegram.ext import (
     filters,
 )
 
-
-# Replace this with the owner ID from your config.py if it already exists.
-try:
-    from config import OWNER_ID
-except ImportError:
-    OWNER_ID = 8599799463
+from config import OWNER_IDS
 
 
-ANNOUNCEMENT_PENDING_KEY = "announcement_pending"
+# Same approach as V1:
+# the registry lives in application.bot_data and needs no migration.
+GROUPS_KEY = "known_group_ids"
 
 
-def _is_owner(update: Update) -> bool:
-    user = update.effective_user
-    if user is None:
-        return False
+def _get_group_registry(context: ContextTypes.DEFAULT_TYPE) -> set[int]:
+    groups = context.application.bot_data.setdefault(GROUPS_KEY, set())
 
-    try:
-        return int(user.id) == int(OWNER_ID)
-    except (TypeError, ValueError):
-        return False
+    # Protect against an old version having stored a list.
+    if not isinstance(groups, set):
+        groups = set(groups)
+        context.application.bot_data[GROUPS_KEY] = groups
 
-
-async def _send_announcement(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    text: str,
-):
-    chat_ids = context.application.bot_data.get(
-        "known_group_ids",
-        set(),
-    )
-
-    if not chat_ids:
-        await update.effective_message.reply_text(
-            "⚠️ No registered groups yet."
-        )
-        return
-
-    sent = 0
-    failed = 0
-
-    for chat_id in list(chat_ids):
-        try:
-            await context.bot.send_message(
-                chat_id=int(chat_id),
-                text=text,
-            )
-            sent += 1
-
-        except Exception as error:
-            failed += 1
-
-            # A group may have removed the bot or become inaccessible.
-            # Remove it from the in-memory registry so future announcements
-            # don't keep retrying the same dead chat.
-            error_name = type(error).__name__
-            error_text = str(error)
-
-            print(
-                "⚠️ ANNOUNCEMENT FAILED:",
-                chat_id,
-                error_name,
-                error_text,
-            )
-
-            if any(
-                marker in error_text
-                for marker in (
-                    "Chat not found",
-                    "Forbidden",
-                    "bot was kicked",
-                    "not enough rights",
-                )
-            ):
-                chat_ids.discard(chat_id)
-
-    try:
-        await update.effective_message.reply_text(
-            "📢 Announcement sent.\n\n"
-            f"✅ Groups reached: {sent}\n"
-            f"❌ Failed: {failed}"
-        )
-    except Exception as error:
-        # Never let the confirmation message turn a successful broadcast
-        # into an apparent command failure.
-        print(
-            "⚠️ ANNOUNCEMENT CONFIRMATION ERROR:",
-            type(error).__name__,
-            error,
-        )
-
-
-async def annonce_command(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-):
-    if not _is_owner(update):
-        return
-
-    message = update.effective_message
-
-    if message is None:
-        return
-
-    # Preserve line breaks exactly as the owner typed them.
-    raw_text = message.text or ""
-
-    # Preserve all line breaks. Support both /annonce and /annonce@BotName.
-    command_part, separator, remainder = raw_text.partition(" ")
-    if not separator:
-        text = ""
-    else:
-        text = remainder
-
-    if text:
-        await _send_announcement(
-            update,
-            context,
-            text,
-        )
-        return
-
-    context.application.bot_data[
-        ANNOUNCEMENT_PENDING_KEY
-    ] = update.effective_user.id
-
-    await message.reply_text(
-        "📢 𝐀𝐍𝐍𝐎𝐔𝐍𝐂𝐄𝐌𝐄𝐍𝐓\n\n"
-        "Send the message you want to broadcast.\n"
-        "It will be sent to every registered group."
-    )
-
-
-async def annonce_text(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-):
-    pending_owner = (
-        context.application.bot_data.get(
-            ANNOUNCEMENT_PENDING_KEY
-        )
-    )
-
-    user = update.effective_user
-
-    if (
-        pending_owner is None
-        or user is None
-        or int(user.id) != int(pending_owner)
-    ):
-        return
-
-    message = update.effective_message
-
-    if message is None or not message.text:
-        return
-
-    # Do not strip, split, or join the message: Telegram's \n characters
-    # are preserved exactly.
-    announcement_text = message.text
-
-    context.application.bot_data.pop(
-        ANNOUNCEMENT_PENDING_KEY,
-        None,
-    )
-
-    await _send_announcement(
-        update,
-        context,
-        announcement_text,
-    )
+    return groups
 
 
 async def track_group(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
-    """
-    Register every group/supergroup that sends an update to the bot.
-
-    Telegram has no API that returns all groups a bot belongs to, so the
-    bot must learn group IDs from updates. This tracker is intentionally
-    broad and runs in a lower-priority handler group.
-    """
+    """Register every group/supergroup that sends an update."""
     chat = update.effective_chat
 
     if chat is None:
@@ -198,12 +43,112 @@ async def track_group(
     if chat.type not in {"group", "supergroup"}:
         return
 
-    ids = context.application.bot_data.setdefault(
-        "known_group_ids",
-        set(),
-    )
+    groups = _get_group_registry(context)
+    groups.add(int(chat.id))
 
-    ids.add(int(chat.id))
+
+async def annonce_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    """Owner-only announcement broadcast, compatible with the V1 approach."""
+    user = update.effective_user
+    message = update.effective_message
+
+    if user is None or message is None:
+        return
+
+    if user.id not in OWNER_IDS:
+        return
+
+    if not context.args:
+        await message.reply_text(
+            "📢 Usage:\n"
+            "/annonce Your message here"
+        )
+        return
+
+    text = " ".join(context.args).strip()
+
+    if not text:
+        await message.reply_text(
+            "❌ The announcement cannot be empty."
+        )
+        return
+
+    groups = _get_group_registry(context)
+
+    if not groups:
+        await message.reply_text(
+            "⚠️ No groups are registered yet.\n"
+            "Send a message in a group where the bot is present, "
+            "then try again."
+        )
+        return
+
+    sent = 0
+    removed = 0
+    failed = 0
+
+    for chat_id in list(groups):
+        try:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=text,
+            )
+            sent += 1
+
+        except Forbidden:
+            # Bot was removed/blocked or has no access anymore.
+            groups.discard(chat_id)
+            removed += 1
+
+        except BadRequest as exc:
+            error_text = str(exc).lower()
+
+            if (
+                "chat not found" in error_text
+                or "bot was kicked" in error_text
+                or "not enough rights" in error_text
+                or "have no rights" in error_text
+            ):
+                groups.discard(chat_id)
+                removed += 1
+            else:
+                failed += 1
+                print(
+                    f"⚠️ ANNOUNCEMENT BadRequest for {chat_id}: {exc}"
+                )
+
+        except NetworkError as exc:
+            # Temporary Telegram/network issue: keep the group registered.
+            failed += 1
+            print(
+                f"⚠️ ANNOUNCEMENT NetworkError for {chat_id}: {exc}"
+            )
+
+        except TelegramError as exc:
+            failed += 1
+            print(
+                f"⚠️ ANNOUNCEMENT TelegramError for {chat_id}: {exc}"
+            )
+
+        except Exception as exc:
+            failed += 1
+            print(
+                f"⚠️ ANNOUNCEMENT unexpected error for {chat_id}: {exc}"
+            )
+
+        # Avoid hammering Telegram when there are many groups.
+        await asyncio.sleep(0.05)
+
+    await message.reply_text(
+        "📢 Announcement finished.\n\n"
+        f"✅ Sent: {sent}\n"
+        f"❌ Failed: {failed}\n"
+        f"🗑 Removed: {removed}\n"
+        f"📊 Registered groups: {len(groups)}"
+    )
 
 
 annonce_handler = CommandHandler(
@@ -211,12 +156,17 @@ annonce_handler = CommandHandler(
     annonce_command,
 )
 
-annonce_message_handler = MessageHandler(
-    filters.TEXT & ~filters.COMMAND,
-    annonce_text,
-)
-
+# Register this low-priority tracker in main.py:
+# application.add_handler(
+#     MessageHandler(
+#         filters.ChatType.GROUPS,
+#         track_group,
+#     ),
+#     group=-11,
+# )
+#
+# The tracker intentionally does not use a database or Alembic migration.
 group_tracker_handler = MessageHandler(
-    filters.ALL,
+    filters.ChatType.GROUPS,
     track_group,
 )

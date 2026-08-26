@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from telegram import Update
+from telegram import Update, error
+import asyncio
 from telegram.ext import CommandHandler, ContextTypes
 from sqlalchemy import select
 
@@ -127,20 +128,42 @@ async def addcoins(
             else f"User #{target.id}"
         )
 
-    await message.reply_photo(
-        photo=open(
-            IMAGE_FILE,
-            "rb",
-        ),
-        caption=(
-            "💰 𝐂𝐎𝐈𝐍𝐒 𝐀𝐃𝐃𝐄𝐃\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            f"👤 User : {target_name}\n"
-            f"➕ Added : {amount:,} Coins\n"
-            f"💰 New balance : {new_balance:,} Coins\n\n"
-            "✅ Operation completed."
-        ),
+    caption = (
+        "💰 𝐂𝐎𝐈𝐍𝐒 𝐀𝐃𝐃𝐄𝐃\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 User : {target_name}\n"
+        f"➕ Added : {amount:,} Coins\n"
+        f"💰 New balance : {new_balance:,} Coins\n\n"
+        "✅ Operation completed."
     )
+
+    # The database transaction above is already committed before this
+    # Telegram request. A temporary Telegram/network failure therefore
+    # cannot roll back or duplicate the coin operation.
+    if IMAGE_FILE.exists():
+        for attempt in range(3):
+            try:
+                with IMAGE_FILE.open("rb") as photo:
+                    await message.reply_photo(
+                        photo=photo,
+                        caption=caption,
+                    )
+                break
+            except error.NetworkError:
+                if attempt == 2:
+                    # Do not crash the handler if Telegram is temporarily
+                    # unavailable after the coins were successfully added.
+                    return
+                await asyncio.sleep(1.5 * (attempt + 1))
+    else:
+        for attempt in range(3):
+            try:
+                await message.reply_text(caption)
+                break
+            except error.NetworkError:
+                if attempt == 2:
+                    return
+                await asyncio.sleep(1.5 * (attempt + 1))
 
 
 addcoins_handler = CommandHandler(

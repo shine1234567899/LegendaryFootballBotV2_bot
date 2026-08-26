@@ -2,6 +2,7 @@ from telegram import BotCommand
 from telegram.ext import (
     Application,
     CommandHandler,
+    CallbackQueryHandler,
 )
 
 from handlers.trade import trade_handler
@@ -66,6 +67,10 @@ from handlers.training import (
 from handlers.friendly import (
     friendly_handler,
     friendly_callback_router_handler,
+    friendlypay_handler,
+    friendlypay_callback_handler,
+    friendlypay_decline_callback,
+    friendly_forfeit_callback,
 )
 from handlers.friendly import (
     subs_handler,
@@ -131,7 +136,10 @@ from handlers.trade import (
     trade_handler,
     trade_callback_handler,
 )
-from handlers.annonce import annonce_handler
+from handlers.annonce import (
+    annonce_handler,
+    group_tracker_handler,
+)
 from handlers.daily import daily_handler
 from handlers.ref import ref_handler
 from handlers.sanction import sanction_handler
@@ -142,6 +150,36 @@ from handlers.richlist import richlist_handler, richlist_callback_handler
 from handlers.command_tracker import command_tracker_handler
 from handlers.referral_processor import referral_start_middleware
 from handlers.pari import pari_handler
+from handlers.manager_sponsors import (
+    sponsor_handler,
+    sponsors_handler,
+    sponsor_select_callback_handler,
+)
+from handlers.manager_contract_commands import (
+    contract_handler,
+    create_contract_handler,
+    contract_pay_handler,
+    contract_pay_callback_handler,
+)
+from handlers.manager_transfers_contracts import (
+    sellplayer_handler,
+    releaseplayer_handler,
+    mytransfers_handler,
+)
+from handlers.manager_ballondor import (
+    nomined_handler,
+    ballondorrank_handler,
+    ballondororder_handler,
+    ballondorwinner_handler,
+    clearballondor_handler,
+    ballondorhelp_handler,
+)
+from handlers.manager_contracts import (
+    pay_all_due_salaries,
+)
+from handlers.manager_sponsors import (
+    pay_all_due_sponsors,
+)
 
 
 
@@ -173,6 +211,8 @@ async def post_init(
         BotCommand("addplayer", "Add a player"),
         BotCommand("transfer", "Open the transfer market"),
         BotCommand("refillmarket", "Refill the transfer market"),
+        BotCommand("friendlypay", "Play a Friendly with a virtual stake"),
+        BotCommand("pari", "Football predictions"),
         BotCommand("lineup", "Manage your lineup"),
         BotCommand("training", "Train your players"),
         BotCommand("friendly", "Play a friendly match"),
@@ -192,7 +232,6 @@ async def post_init(
         BotCommand("quiz", "Play the football quiz"),
         BotCommand("profile", "View your profile"),
         BotCommand("balance", "View your balance"),
-        BotCommand("achat", "Buy Coins or Gems with Telegram Stars"),
         BotCommand("stats", "View your statistics"),
         BotCommand("rankings", "View rankings"),
         BotCommand("daily", "Claim your daily reward"),
@@ -209,6 +248,20 @@ async def post_init(
         BotCommand("command", "View your daily command count"),
         BotCommand("commandrank", "View command rankings"),
         BotCommand("richlist", "View the richest managers"),
+        BotCommand("contracts", "View player contracts"),
+        BotCommand("contract", "Create or renew a player contract"),
+        BotCommand("paysalary", "Pay a player salary"),
+        BotCommand("sellplayer", "List a player for sale"),
+        BotCommand("releaseplayer", "Release a player"),
+        BotCommand("mytransfers", "View your transfer listings"),
+        BotCommand("sponsor", "Manage club sponsors"),
+        BotCommand("sponsors", "View active sponsors"),
+        BotCommand("nomined", "Add a Ballon d'Or nominee"),
+        BotCommand("ballondorrank", "View Ballon d'Or ranking"),
+        BotCommand("ballondororder", "Set Ballon d'Or ranking"),
+        BotCommand("ballondorwinner", "Set Ballon d'Or winner"),
+        BotCommand("clearballondor", "Reset Ballon d'Or"),
+        BotCommand("ballondorhelp", "Ballon d'Or commands"),
     ]
 
     try:
@@ -227,6 +280,33 @@ async def post_init(
 # ==========================================================
 # MAIN
 # ==========================================================
+
+
+# ==========================================================
+# DAILY MANAGER PAYMENTS
+# ==========================================================
+
+async def daily_manager_payments(context):
+    """Pay due player salaries and sponsor income once per day."""
+    try:
+        salary_result = await pay_all_due_salaries()
+    except Exception as exc:
+        print(f"[DAILY PAYMENTS] salary error: {exc}")
+        salary_result = {"paid": 0, "left": 0, "skipped": 0}
+
+    try:
+        sponsor_result = await pay_all_due_sponsors()
+    except Exception as exc:
+        print(f"[DAILY PAYMENTS] sponsor error: {exc}")
+        sponsor_result = {"paid": 0, "expired": 0, "skipped": 0}
+
+    print(
+        "[DAILY PAYMENTS] "
+        f"salaries_paid={salary_result.get('paid', 0)} "
+        f"salaries_left={salary_result.get('left', 0)} "
+        f"sponsors_paid={sponsor_result.get('paid', 0)} "
+        f"sponsors_expired={sponsor_result.get('expired', 0)}"
+    )
 
 def main():
     application = (
@@ -248,6 +328,11 @@ def main():
     application.add_handler(
         command_tracker_handler,
         group=-10,
+    )
+
+    application.add_handler(
+        group_tracker_handler,
+        group=-11,
     )
 
     application.add_handler(
@@ -359,6 +444,28 @@ def main():
     )
 
     application.add_handler(
+        friendlypay_handler
+    )
+
+    application.add_handler(
+        friendlypay_callback_handler
+    )
+
+    application.add_handler(
+        CallbackQueryHandler(
+            friendlypay_decline_callback,
+            pattern=r"^friendlypay_decline:.+$",
+        )
+    )
+
+    application.add_handler(
+        CallbackQueryHandler(
+            friendly_forfeit_callback,
+            pattern=r"^friendly_forfeit:.+$",
+        )
+    )
+
+    application.add_handler(
         subs_handler
     )
     application.add_handler(
@@ -448,6 +555,38 @@ def main():
     application.add_handler(sendplayer_handler)
 
     application.add_handler(addcoins_handler)
+
+    # ======================================================
+    # MANAGER — CONTRACTS / PLAYER SALES
+    # ======================================================
+
+    application.add_handler(contract_handler)
+    application.add_handler(create_contract_handler)
+    application.add_handler(contract_pay_handler)
+    application.add_handler(contract_pay_callback_handler)
+
+    application.add_handler(sellplayer_handler)
+    application.add_handler(releaseplayer_handler)
+    application.add_handler(mytransfers_handler)
+
+    # ======================================================
+    # MANAGER — SPONSORS
+    # ======================================================
+
+    application.add_handler(sponsor_handler)
+    application.add_handler(sponsors_handler)
+    application.add_handler(sponsor_select_callback_handler)
+
+    # ======================================================
+    # MANAGER — BALLON D'OR
+    # ======================================================
+
+    application.add_handler(nomined_handler)
+    application.add_handler(ballondorrank_handler)
+    application.add_handler(ballondororder_handler)
+    application.add_handler(ballondorwinner_handler)
+    application.add_handler(clearballondor_handler)
+    application.add_handler(ballondorhelp_handler)
 
     application.run_polling()
 

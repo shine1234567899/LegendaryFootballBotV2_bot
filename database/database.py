@@ -76,13 +76,48 @@ ASYNC_DATABASE_URL = get_async_database_url(
 # ENGINE
 # ==========================================================
 
+# ==========================================================
+# SSL
+# ==========================================================
+#
+# Northflank production uses SSL.
+# For local Northflank addon forwarding, the forwarded
+# PostgreSQL endpoint can reject an SSL upgrade.
+#
+# Set DATABASE_SSL=false locally when using:
+#   northflank forward addon ...
+#
+# Keep DATABASE_SSL=true in production.
+# ==========================================================
+
+import os
+
+DATABASE_SSL = os.getenv(
+    "DATABASE_SSL",
+    "true",
+).strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
+
+connect_args = {
+    "ssl": True,
+} if DATABASE_SSL else {
+    "ssl": False,
+}
+
+
+# ==========================================================
+# ENGINE
+# ==========================================================
+
 engine = create_async_engine(
     ASYNC_DATABASE_URL,
     echo=False,
     pool_pre_ping=True,
-    connect_args={
-        "ssl": True,
-    },
+    connect_args=connect_args,
 )
 
 
