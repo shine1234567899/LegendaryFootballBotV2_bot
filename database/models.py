@@ -822,7 +822,9 @@ class MatchPlayerStats(Base):
 class TransferListing(Base):
     __tablename__ = "transfer_listings"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(
+        primary_key=True
+    )
 
     player_id: Mapped[int] = mapped_column(
         ForeignKey("players.id"),
@@ -830,11 +832,23 @@ class TransferListing(Base):
         nullable=False,
     )
 
+    # Club that listed the player.
+    # NULL means the player was released directly to the market.
+    seller_club_id: Mapped[int | None] = mapped_column(
+        ForeignKey("clubs.id"),
+        nullable=True,
+    )
+
     price: Mapped[int] = mapped_column(
         BigInteger,
         nullable=False,
     )
-    currency = Column(String(10), nullable=False, default="COINS")
+
+    currency: Mapped[str] = mapped_column(
+        String(10),
+        nullable=False,
+        default="COINS",
+    )
 
     status: Mapped[str] = mapped_column(
         String(20),
@@ -854,7 +868,8 @@ class TransferListing(Base):
     )
 
     player: Mapped["Player"] = relationship()
-    currency = Column(String(10), nullable=False, default="COINS")
+    seller_club: Mapped["Club | None"] = relationship()
+
 class Transaction(Base):
     __tablename__ = "transactions"
 

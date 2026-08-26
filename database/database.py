@@ -156,9 +156,70 @@ async def init_database() -> None:
     from database.models import Base
 
     async with engine.begin() as connection:
+        # Create all tables first.
         await connection.run_sync(
             Base.metadata.create_all
         )
+
+        # ------------------------------------------------------
+        # Automatic migration: transfer_listings.seller_club_id
+        # ------------------------------------------------------
+        # Older databases were created before TransferListing
+        # tracked the seller club. SQLAlchemy create_all() does
+        # NOT add new columns to an existing table, so add the
+        # column explicitly when it is missing.
+        from sqlalchemy import text
+
+        result = await connection.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'transfer_listings'
+                  AND column_name = 'seller_club_id'
+                """
+            )
+        )
+
+        if result.first() is None:
+            await connection.execute(
+                text(
+                    """
+                    ALTER TABLE transfer_listings
+                    ADD COLUMN seller_club_id BIGINT
+                    """
+                )
+            )
+
+            # Add the FK only if it does not already exist.
+            fk_exists = await connection.execute(
+                text(
+                    """
+                    SELECT 1
+                    FROM pg_constraint
+                    WHERE conrelid =
+                        'transfer_listings'::regclass
+                      AND contype = 'f'
+                      AND pg_get_constraintdef(oid)
+                          LIKE '%(seller_club_id)%'
+                    """
+                )
+            )
+
+            if fk_exists.first() is None:
+                await connection.execute(
+                    text(
+                        """
+                        ALTER TABLE transfer_listings
+                        ADD CONSTRAINT
+                        fk_transfer_listings_seller_club
+                        FOREIGN KEY (seller_club_id)
+                        REFERENCES clubs(id)
+                        ON DELETE SET NULL
+                        """
+                    )
+                )
 
 
 # ==========================================================
