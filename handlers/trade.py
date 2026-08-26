@@ -1,6 +1,8 @@
 from __future__ import annotations
+from ast import Delete
 
 from datetime import datetime, timezone
+from operator import delitem
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -17,6 +19,8 @@ from database.models import (
     ClubPlayer,
     Player,
     Trade,
+    SavedLineup,
+    SavedLineupPlayer,
 )
 
 
@@ -747,6 +751,58 @@ async def trade_response_callback(
             requested_player = await session.get(
                 Player,
                 trade.requested_player_id,
+            )
+
+            # --------------------------------------------------
+            # IMPORTANT:
+            # A trade changes ownership, but the traded players
+            # must NOT remain in the old clubs' lineups.
+            # ClubPlayer rows are preserved; only lineup flags,
+            # when present in the model, are cleared.
+            # --------------------------------------------------
+            for ownership in (offered_ownership, requested_ownership):
+                for attr in (
+                    "is_in_lineup",
+                    "in_lineup",
+                    "is_starting",
+                    "is_starter",
+                    "starting",
+                    "lineup",
+                    "is_current_lineup",
+                ):
+                    if hasattr(ownership, attr):
+                        current = getattr(ownership, attr)
+                        if isinstance(current, bool):
+                            setattr(ownership, attr, False)
+
+            # --------------------------------------------------
+            # REMOVE BOTH PLAYERS FROM THEIR OLD SAVED LINEUPS
+            # --------------------------------------------------
+            # A trade changes squad ownership, but it must never
+            # leave a player registered in the previous club's
+            # saved lineups. We delete only lineup membership;
+            # the ClubPlayer ownership rows are preserved.
+            sender_lineup_ids = (
+                select(SavedLineup.id)
+                .where(SavedLineup.club_id == sender_club.id)
+            )
+            receiver_lineup_ids = (
+                select(SavedLineup.id)
+                .where(SavedLineup.club_id == receiver_club.id)
+            )
+
+            await session.execute(
+                Delete(SavedLineupPlayer).where(
+                    SavedLineupPlayer.saved_lineup_id.in_(sender_lineup_ids),
+                    SavedLineupPlayer.player_id == trade.offered_player_id,
+                )
+            )
+
+            await session.execute(
+                delitem(SavedLineupPlayer).where(
+                    SavedLineupPlayer.saved_lineup_id.in_(receiver_lineup_ids),
+                    SavedLineupPlayer.player_id == trade.requested_player_id,
+                )
             )
 
             # Swap ownership atomically.
