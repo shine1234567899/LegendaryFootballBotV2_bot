@@ -22,6 +22,7 @@ from database.models import (
     TransferListing,
     Transaction,
 )
+from handlers.manager_contracts import ensure_player_contract
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -443,6 +444,14 @@ async def transfermarket_callback(
             )
 
             session.add(club_player)
+            await session.flush()
+
+            # Contrat initial automatique pour tout nouveau joueur.
+            await ensure_player_contract(
+                session,
+                club.id,
+                player.id,
+            )
 
             # Listing vendu
             listing.status = "sold"
@@ -480,7 +489,9 @@ async def transfermarket_callback(
                 f"⭐ Overall: {player.overall}\n"
                 f"📍 Position: {player.position}\n"
                 f"🌍 Country: {player.country}\n\n"
-                f"{currency_text(listing.price, listing.currency)}\n\n"
+                f"{currency_text(listing.price, listing.currency)}\n"
+                "📄 Initial contract: 30 days\n"
+                "💰 Initial salary: 100,000 Coins/day\n\n"
                 "🏟️ The player has joined your club!"
             )
         )

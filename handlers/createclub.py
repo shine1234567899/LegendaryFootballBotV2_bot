@@ -11,6 +11,7 @@ from services.starter_squad import generate_starter_squad
 
 from database.database import AsyncSessionLocal
 from database.models import User, Club, Player, ClubPlayer
+from handlers.manager_contracts import ensure_player_contract
 
 
 CLUB_NAME, COUNTRY, STADIUM, LOGO, CONFIRM = range(5)
@@ -286,14 +287,20 @@ async def confirm_club(
             session.add(club)
             await session.flush()
 
-            # Ajout des 18 joueurs.
+            # Ajout des 18 joueurs + contrat automatique.
             for player in players:
-                session.add(
-                    ClubPlayer(
-                        club_id=club.id,
-                        player_id=player.id,
-                        is_current=True,
-                    )
+                club_player = ClubPlayer(
+                    club_id=club.id,
+                    player_id=player.id,
+                    is_current=True,
+                )
+                session.add(club_player)
+                await session.flush()
+
+                await ensure_player_contract(
+                    session,
+                    club.id,
+                    player.id,
                 )
 
             # Starter pack.

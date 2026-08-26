@@ -1,5 +1,6 @@
 import asyncio
 import time
+import secrets
 
 from telegram.error import TimedOut, RetryAfter, NetworkError, BadRequest
 
@@ -2671,11 +2672,7 @@ async def friendly(
             )
             return
 
-    match_id = (
-        f"{challenger.id}_"
-        f"{invited_user.id}_"
-        f"{int(time.time() * 1000)}"
-    )
+    match_id = secrets.token_hex(6)
 
     pending = {
         "match_id": match_id,
@@ -2714,7 +2711,15 @@ async def friendly(
                         f"friendly_decline:{match_id}"
                     ),
                 ),
-            ]
+            ],
+            [
+                InlineKeyboardButton(
+                    "🏳️ FORFEIT",
+                    callback_data=(
+                        f"friendly_forfeit:{match_id}"
+                    ),
+                )
+            ],
         ]
     )
 
@@ -2886,7 +2891,7 @@ async def friendlypay(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Create your club first.")
         return
 
-    match_id = f"pay_{challenger.id}_{invited_user.id}_{int(time.time()*1000)}"
+    match_id = secrets.token_hex(6)
     pending = {
         "match_id": match_id,
         "challenger_id": challenger.id,
@@ -3002,8 +3007,8 @@ async def friendly_forfeit_callback(update, context):
         await _safe_query_answer(query, "❌ Match not found.", True)
         return
 
-    # Forfeit is for a pending challenge: the challenger cancels it
-    # when the opponent has not answered.
+    # Forfeit cancels a pending challenge before acceptance.
+    # Only the challenger who created the invitation can use it.
     if query.from_user.id != pending.get("challenger_id"):
         await _safe_query_answer(query, "❌ Only the challenger can forfeit this pending match.", True)
         return

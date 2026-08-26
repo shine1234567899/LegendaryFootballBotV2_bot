@@ -446,24 +446,7 @@ def main():
     application.add_handler(
         friendlypay_handler
     )
-
-    application.add_handler(
-        friendlypay_callback_handler
-    )
-
-    application.add_handler(
-        CallbackQueryHandler(
-            friendlypay_decline_callback,
-            pattern=r"^friendlypay_decline:.+$",
-        )
-    )
-
-    application.add_handler(
-        CallbackQueryHandler(
-            friendly_forfeit_callback,
-            pattern=r"^friendly_forfeit:.+$",
-        )
-    )
+    # Friendly/Friendly Pay callbacks are handled by the single router.
 
     application.add_handler(
         subs_handler
