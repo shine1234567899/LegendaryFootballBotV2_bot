@@ -355,7 +355,8 @@ def main():
     # ======================================================
 
     application.add_handler(
-        trade_response_handler
+        trade_response_handler,
+        group=-20,
     )
 
     # ======================================================
