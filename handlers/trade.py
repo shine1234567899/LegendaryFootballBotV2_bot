@@ -1,8 +1,6 @@
 from __future__ import annotations
-from ast import Delete
 
 from datetime import datetime, timezone
-from operator import delitem
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -10,7 +8,7 @@ from telegram.ext import (
     CallbackQueryHandler,
     ContextTypes,
 )
-from sqlalchemy import select
+from sqlalchemy import select, delete
 
 from database.database import AsyncSessionLocal
 from database.models import (
@@ -792,14 +790,14 @@ async def trade_response_callback(
             )
 
             await session.execute(
-                Delete(SavedLineupPlayer).where(
+                delete(SavedLineupPlayer).where(
                     SavedLineupPlayer.saved_lineup_id.in_(sender_lineup_ids),
                     SavedLineupPlayer.player_id == trade.offered_player_id,
                 )
             )
 
             await session.execute(
-                delitem(SavedLineupPlayer).where(
+                delete(SavedLineupPlayer).where(
                     SavedLineupPlayer.saved_lineup_id.in_(receiver_lineup_ids),
                     SavedLineupPlayer.player_id == trade.requested_player_id,
                 )
