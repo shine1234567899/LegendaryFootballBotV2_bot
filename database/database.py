@@ -117,7 +117,7 @@ engine = create_async_engine(
     ASYNC_DATABASE_URL,
     echo=False,
     pool_pre_ping=True,
-    connect_args={"ssl": False}
+    connect_args=connect_args,
 )
 
 
