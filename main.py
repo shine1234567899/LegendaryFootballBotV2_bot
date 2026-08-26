@@ -141,13 +141,12 @@ from handlers.annonce import (
     group_tracker_handler,
 )
 from handlers.daily import daily_handler
-from handlers.ref import ref_handler
+from handlers.ref import ref_handler, process_referral_start
 from handlers.leagueids import leagueids_handler
 from handlers.command import command_handler
 from handlers.commandrank import commandrank_handler
 from handlers.richlist import richlist_handler, richlist_callback_handler
 from handlers.command_tracker import command_tracker_handler
-from handlers.referral_processor import referral_start_middleware
 from handlers.pari import pari_handler
 from handlers.manager_sponsors import (
     sponsor_handler,
@@ -319,6 +318,21 @@ async def daily_manager_payments(context):
         f"sponsors_expired={sponsor_result.get('expired', 0)}"
     )
 
+
+async def referral_aware_start(update, context):
+    """Register a referral payload, then run the normal /start."""
+    try:
+        await process_referral_start(update, context)
+    except Exception as error:
+        print(
+            "⚠️ Referral processing error:",
+            type(error).__name__,
+            error,
+        )
+
+    await start(update, context)
+
+
 def main():
     application = (
         Application
@@ -347,21 +361,13 @@ def main():
     )
 
     application.add_handler(
-        CommandHandler(
-            "start",
-            referral_start_middleware,
-        ),
-        group=-9,
-    )
-
-    application.add_handler(
         friendly_callback_router_handler
     )
 
     application.add_handler(
         CommandHandler(
             "start",
-            start,
+            referral_aware_start,
         ),
         group=0,
     )

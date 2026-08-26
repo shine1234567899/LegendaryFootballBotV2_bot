@@ -12,6 +12,7 @@ from services.starter_squad import generate_starter_squad
 from database.database import AsyncSessionLocal
 from database.models import User, Club, Player, ClubPlayer
 from handlers.manager_contracts import ensure_player_contract
+from handlers.ref import reward_referral_for_club_creation
 
 
 CLUB_NAME, COUNTRY, STADIUM, LOGO, CONFIRM = range(5)
@@ -306,6 +307,14 @@ async def confirm_club(
             # Starter pack.
             user.coins = 50_000_000
             user.gems = 500
+
+            # Referral reward is triggered ONLY when the referred user
+            # successfully creates their first club.
+            await reward_referral_for_club_creation(
+                session,
+                referred_id=user_id,
+                reward=1_000_000,
+            )
 
             await session.commit()
 
