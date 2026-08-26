@@ -1,0 +1,1 @@
+"""Independent Life World system."""

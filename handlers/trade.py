@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     CommandHandler,
@@ -445,35 +447,134 @@ async def trade_callback(
         return
 
     if action == "continue":
-        offer_player_id = context.user_data.get(
-            "pending_trade_offer_player"
-        )
-
+        offer_player_id = context.user_data.get("pending_trade_offer_player")
         if offer_player_id is None:
-            await query.edit_message_text(
-                "⚠️ This trade session has expired."
-            )
+            await query.edit_message_text("⚠️ This trade session has expired.")
+            return
+
+        async with AsyncSessionLocal() as session:
+            receiver_club = await _get_user_club(session, target["receiver_id"])
+            if receiver_club is None:
+                await query.edit_message_text("❌ The other manager has no club.")
+                return
+            players = await _get_current_players(session, receiver_club.id)
+
+        if not players:
+            await query.edit_message_text("❌ The other manager has no players available.")
             return
 
         await query.edit_message_text(
-            (
-                "🤝 𝐓𝐑𝐀𝐃𝐄 𝐎𝐅𝐅𝐄𝐑\n"
-                "━━━━━━━━━━━━━━━━━━━━\n"
-                "⚽ Your offered player is selected.\n\n"
-                "The receiver/requested-player selection "
-                "will be completed in the next trade step."
-            ),
-            reply_markup=InlineKeyboardMarkup(
-                [
-                    [
-                        InlineKeyboardButton(
-                            "❌ CLOSE",
-                            callback_data="trade:close",
-                        )
-                    ]
-                ]
-            ),
+            "🤝 𝐓𝐑𝐀𝐃𝐄\n━━━━━━━━━━━━━━━━━━━━\n"
+            "📥 Choose the player you want from the other manager:",
+            reply_markup=_requested_player_keyboard(players),
         )
+        return
+
+    if action == "request":
+        if len(action_parts) != 3:
+            return
+
+        try:
+            requested_player_id = int(action_parts[2])
+        except ValueError:
+            await query.edit_message_text("❌ Invalid player.")
+            return
+
+        offered_player_id = context.user_data.get("pending_trade_offer_player")
+        if offered_player_id is None:
+            await query.edit_message_text("⚠️ This trade session has expired.")
+            return
+
+        async with AsyncSessionLocal() as session:
+            sender_club = await _get_user_club(session, query.from_user.id)
+            receiver_club = await _get_user_club(session, target["receiver_id"])
+
+            if sender_club is None or receiver_club is None:
+                await query.edit_message_text("❌ One of the clubs no longer exists.")
+                return
+
+            offered_ownership = await session.scalar(select(ClubPlayer).where(
+                ClubPlayer.club_id == sender_club.id,
+                ClubPlayer.player_id == offered_player_id,
+                ClubPlayer.is_current.is_(True),
+            ))
+            requested_ownership = await session.scalar(select(ClubPlayer).where(
+                ClubPlayer.club_id == receiver_club.id,
+                ClubPlayer.player_id == requested_player_id,
+                ClubPlayer.is_current.is_(True),
+            ))
+
+            if offered_ownership is None:
+                await query.edit_message_text("❌ You no longer own the offered player.")
+                return
+            if requested_ownership is None:
+                await query.edit_message_text("❌ The requested player is no longer available.")
+                return
+
+            existing = await session.scalar(select(Trade).where(
+                Trade.sender_id == query.from_user.id,
+                Trade.receiver_id == target["receiver_id"],
+                Trade.offered_player_id == offered_player_id,
+                Trade.requested_player_id == requested_player_id,
+                Trade.status.in_(["pending", "PENDING"]),
+            ))
+            if existing is not None:
+                await query.edit_message_text("❌ This trade offer is already pending.")
+                return
+
+            offered_player = await session.get(Player, offered_player_id)
+            requested_player = await session.get(Player, requested_player_id)
+
+            trade_obj = Trade(
+                sender_id=query.from_user.id,
+                receiver_id=target["receiver_id"],
+                offered_player_id=offered_player_id,
+                requested_player_id=requested_player_id,
+                offered_coins=0,
+                requested_coins=0,
+                status="pending",
+            )
+            session.add(trade_obj)
+            await session.flush()
+            trade_id = trade_obj.id
+            await session.commit()
+
+        await query.edit_message_text(
+            "✅ 𝐓𝐑𝐀𝐃𝐄 𝐒𝐄𝐍𝐓\n━━━━━━━━━━━━━━━━━━━━\n"
+            f"👤 To : {target['receiver_name']}\n"
+            f"⚽ You offer : {offered_player.name}\n"
+            f"📥 You request : {requested_player.name}\n\n"
+            "⏳ Waiting for acceptance."
+        )
+
+        sender_label = (
+            f"@{query.from_user.username}"
+            if query.from_user.username
+            else (query.from_user.first_name or str(query.from_user.id))
+        )
+
+        try:
+            await context.bot.send_message(
+                chat_id=target["receiver_id"],
+                text=(
+                    "🤝 𝐍𝐄𝐖 𝐓𝐑𝐀𝐃𝐄 𝐎𝐅𝐅𝐄𝐑\n━━━━━━━━━━━━━━━━━━━━\n"
+                    f"👤 From : {sender_label}\n"
+                    f"⚽ Offered : {offered_player.name}\n"
+                    f"📥 Requested : {requested_player.name}\n\n"
+                    "Do you accept this trade?"
+                ),
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("✅ ACCEPT", callback_data=f"trade_accept:{trade_id}"),
+                    InlineKeyboardButton("❌ DECLINE", callback_data=f"trade_decline:{trade_id}"),
+                ]]),
+            )
+        except Exception:
+            async with AsyncSessionLocal() as session:
+                failed = await session.get(Trade, trade_id)
+                if failed is not None:
+                    failed.status = "cancelled"
+                    await session.commit()
+        return
 
 
 trade_handler = CommandHandler(
@@ -505,7 +606,7 @@ async def trade_response_callback(update: Update, context: ContextTypes.DEFAULT_
 
     async with AsyncSessionLocal() as session:
         trade = await session.get(Trade, trade_id)
-        if trade is None or trade.status != "PENDING":
+        if trade is None or str(trade.status).lower() != "pending":
             await query.edit_message_text("⚠️ Trade no longer available.")
             return
         if query.from_user.id != trade.receiver_id:
@@ -513,7 +614,7 @@ async def trade_response_callback(update: Update, context: ContextTypes.DEFAULT_
             return
 
         if action == "decline":
-            trade.status = "DECLINED"
+            trade.status = "declined"
             await session.commit()
             await query.edit_message_text("❌ Trade declined.")
             return
@@ -531,7 +632,7 @@ async def trade_response_callback(update: Update, context: ContextTypes.DEFAULT_
             ClubPlayer.is_current.is_(True),
         ))
         if offered_ownership is None or requested_ownership is None:
-            trade.status = "CANCELLED"
+            trade.status = "cancelled"
             await session.commit()
             await query.edit_message_text("❌ Trade cancelled: player unavailable.")
             return
@@ -539,7 +640,9 @@ async def trade_response_callback(update: Update, context: ContextTypes.DEFAULT_
         # Swap ownership in the same transaction.
         offered_ownership.club_id = receiver_club.id
         requested_ownership.club_id = sender_club.id
-        trade.status = "ACCEPTED"
+        trade.status = "accepted"
+        if hasattr(trade, "completed_at"):
+            trade.completed_at = datetime.now(timezone.utc)
         await session.commit()
 
     await query.edit_message_text("✅ Trade completed successfully.")

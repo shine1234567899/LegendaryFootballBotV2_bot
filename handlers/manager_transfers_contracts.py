@@ -51,7 +51,7 @@ async def _owned_player(
         .where(
             ClubPlayer.club_id == club_id,
             ClubPlayer.is_current.is_(True),
-            Player.name.ilike(name),
+            Player.name.ilike(f"%{name}%"),
         )
     )
 

@@ -79,6 +79,8 @@ from handlers.friendly import (
 from database.database import (
     init_database,
 )
+
+from life_world.handlers.life import life_handler
 from handlers.resetgame import (
     resetgame_handler,
     resetgame_callback_handler,
@@ -213,6 +215,7 @@ async def post_init(
     # ======================================================
     commands = [
         BotCommand("start", "Start the bot"),
+        BotCommand("life", "Open Life World"),
         BotCommand("myclub", "View your club"),
         BotCommand("squad", "View your squad"),
         BotCommand("createclub", "Create your club"),
@@ -375,6 +378,14 @@ def main():
     # START MENU BUTTONS
     application.add_handler(
         start_menu_callback_handler
+    )
+
+    # ======================================================
+    # LIFE WORLD
+    # ======================================================
+
+    application.add_handler(
+        life_handler
     )
 
     application.add_handler(
