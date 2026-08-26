@@ -1074,6 +1074,80 @@ async def lineup_callback(
 
             return
 
+        # --------------------------------------------------
+        # REFRESH CURRENT SQUAD BEFORE SAVING
+        # --------------------------------------------------
+        # A trade can happen while the lineup screen is still open.
+        # In that case context.user_data may still contain a player
+        # who has already left this club. Remove only those stale
+        # entries before attempting the database save.
+        club, current_players = await get_club_players(
+            query.from_user.id
+        )
+
+        if club is None:
+            await query.answer(
+                "❌ Club not found.",
+                show_alert=True,
+            )
+            return
+
+        current_player_ids = {
+            player.id for player in current_players
+        }
+
+        stale_slots = [
+            slot_id
+            for slot_id, player in lineup_players.items()
+            if player.get("id") not in current_player_ids
+        ]
+
+        if stale_slots:
+            stale_names = [
+                lineup_players[slot_id].get("name", "Unknown")
+                for slot_id in stale_slots
+            ]
+
+            for slot_id in stale_slots:
+                lineup_players.pop(slot_id, None)
+
+            context.user_data["lineup_players"] = lineup_players
+
+            names = ", ".join(stale_names[:3])
+            if len(stale_names) > 3:
+                names += f" +{len(stale_names) - 3}"
+
+            await query.answer(
+                (
+                    f"⚠️ {names} n'est plus dans votre effectif. "
+                    "Le joueur a été retiré du lineup : choisissez "
+                    "un remplaçant puis sauvegardez."
+                ),
+                show_alert=True,
+            )
+
+            # Refresh the pitch immediately so the stale player
+            # disappears from the buttons.
+            text = (
+                "⚜️━━━━━━━━━━━━━━━━━━━━⚜️\n"
+                "       𝗟𝗘𝗚𝗘𝗡𝗗𝗔𝗥𝗬 𝗟𝗜𝗡𝗘𝗨𝗣\n"
+                "⚜️━━━━━━━━━━━━━━━━━━━━⚜️\n\n"
+                f"🏟️ Formation : {formation}\n\n"
+                "⚠️ Un joueur a quitté votre effectif.\n"
+                f"👥 Players: {len(lineup_players)}/11\n\n"
+                "👇 Sélectionnez un nouveau joueur."
+            )
+
+            await edit_lineup_message(
+                query,
+                text,
+                build_lineup_keyboard(
+                    formation,
+                    lineup_players,
+                ),
+            )
+            return
+
         if len(lineup_players) != 11:
 
             await query.answer(

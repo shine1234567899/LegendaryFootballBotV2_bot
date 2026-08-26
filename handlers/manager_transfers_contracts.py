@@ -34,15 +34,35 @@ async def _owned_player(
     player_name: str,
 ):
     """
-    Case-insensitive exact player-name lookup among the
-    manager's CURRENT players.
+    Find one CURRENT player owned by the club.
+
+    Exact name is preferred. If there is no exact match, a partial
+    match is allowed, but ambiguous partial matches are rejected instead
+    of silently selecting the first player.
     """
-    name = player_name.strip()
+    name = " ".join(player_name.strip().split())
 
     if not name:
         return None
 
-    result = await session.execute(
+    exact = await session.execute(
+        select(ClubPlayer, Player)
+        .join(
+            Player,
+            Player.id == ClubPlayer.player_id,
+        )
+        .where(
+            ClubPlayer.club_id == club_id,
+            ClubPlayer.is_current.is_(True),
+            Player.name.ilike(name),
+        )
+    )
+
+    exact_row = exact.first()
+    if exact_row is not None:
+        return exact_row
+
+    partial = await session.execute(
         select(ClubPlayer, Player)
         .join(
             Player,
@@ -53,9 +73,19 @@ async def _owned_player(
             ClubPlayer.is_current.is_(True),
             Player.name.ilike(f"%{name}%"),
         )
+        .order_by(
+            Player.overall.desc(),
+            Player.name.asc(),
+        )
     )
 
-    return result.first()
+    rows = list(partial.all())
+
+    if len(rows) == 1:
+        return rows[0]
+
+    # Never pick an arbitrary player when multiple names match.
+    return None
 
 
 # ==========================================================
@@ -182,25 +212,10 @@ async def sell_player(
 
         now = datetime.now(timezone.utc)
 
-        # Remove player from the current squad while listed.
-        club_player.is_current = False
-        club_player.left_at = now
-
-        # Stop his old salary contract while he is listed.
-        contract = await session.scalar(
-            select(PlayerContract).where(
-                PlayerContract.club_id == club.id,
-                PlayerContract.player_id == player.id,
-                PlayerContract.active.is_(True),
-            )
-        )
-
-        if contract is not None:
-            contract.active = False
-
-        # IMPORTANT:
-        # transfermarket.py buys only listings with status
-        # "available". This is the key fix.
+        # Create the listing FIRST.
+        # The player remains in the club until another manager actually
+        # buys the listing. This prevents failed listings from removing
+        # players from the squad.
         listing = TransferListing(
             player_id=player.id,
             seller_club_id=club.id,
@@ -232,8 +247,7 @@ async def release_player(
     context: ContextTypes.DEFAULT_TYPE,
 ):
     """
-    Release a player and put him on the Transfer Market
-    at his normal market value.
+    Put a player on the Transfer Market at his normal market value.
     """
     message = update.effective_message
     user = update.effective_user
@@ -277,8 +291,8 @@ async def release_player(
             return
 
         club_player, player = owned
-        now = datetime.now(timezone.utc)
 
+        # Check for an existing market listing before changing ownership.
         existing = await session.scalar(
             select(TransferListing).where(
                 TransferListing.player_id == player.id,
@@ -294,25 +308,15 @@ async def release_player(
             )
             return
 
-        club_player.is_current = False
-        club_player.left_at = now
-
-        contract = await session.scalar(
-            select(PlayerContract).where(
-                PlayerContract.club_id == club.id,
-                PlayerContract.player_id == player.id,
-                PlayerContract.active.is_(True),
-            )
-        )
-
-        if contract is not None:
-            contract.active = False
-
         market_value = max(
             int(player.value or 0),
             1,
         )
 
+        # Create the release listing first.
+        # Ownership is preserved until the market transaction actually
+        # completes. This prevents a failed release from removing the
+        # player from the squad.
         session.add(
             TransferListing(
                 player_id=player.id,
