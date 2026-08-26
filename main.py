@@ -5,7 +5,7 @@ from telegram.ext import (
     CallbackQueryHandler,
 )
 
-from handlers.trade import trade_handler
+from handlers.trade import trade_handler, trade_response_callback
 from handlers.pay import pay_handler
 from handlers.addcoins import addcoins_handler
 
@@ -137,6 +137,7 @@ from handlers.matches import (
 from handlers.trade import (
     trade_handler,
     trade_callback_handler,
+    trade_response_callback,
 )
 from handlers.annonce import (
     annonce_handler,
@@ -533,6 +534,7 @@ def main():
     
     application.add_handler(trade_handler)
     application.add_handler(trade_callback_handler)
+    application.add_handler(trade_response_callback)
     application.add_handler(daily_handler)
     application.add_handler(ref_handler)
     # Sanction enforcement MUST run before normal commands.
