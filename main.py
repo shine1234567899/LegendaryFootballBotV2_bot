@@ -216,7 +216,6 @@ async def post_init(
     # ======================================================
     commands = [
         BotCommand("start", "Start the bot"),
-        BotCommand("life", "Open Life World"),
         BotCommand("myclub", "View your club"),
         BotCommand("squad", "View your squad"),
         BotCommand("createclub", "Create your club"),
@@ -349,6 +348,15 @@ def main():
     # ======================================================
     # BASIC
     # ======================================================
+
+    # ======================================================
+    # TRADE RESPONSE CALLBACKS
+    # Must be registered before broad callback routers.
+    # ======================================================
+
+    application.add_handler(
+        trade_response_handler
+    )
 
     # ======================================================
     # GLOBAL TRACKING / REFERRALS
@@ -534,7 +542,6 @@ def main():
     
     application.add_handler(trade_handler)
     application.add_handler(trade_callback_handler)
-    application.add_handler(trade_response_handler)
     application.add_handler(daily_handler)
     application.add_handler(ref_handler)
     # Sanction enforcement MUST run before normal commands.
