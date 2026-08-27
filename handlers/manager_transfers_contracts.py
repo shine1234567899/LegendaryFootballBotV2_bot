@@ -412,16 +412,31 @@ async def release_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         )
 
+        # player_id is UNIQUE in transfer_listings, so never INSERT a
+        # second row for a player who already has a sold/old listing.
         if listing is None:
-            session.add(
-                TransferListing(
-                    player_id=player.id,
-                    seller_club_id=None,
-                    price=market_value,
-                    currency="coins",
-                    status="available",
+            listing = await session.scalar(
+                select(TransferListing).where(
+                    TransferListing.player_id == player.id
                 )
             )
+
+        if listing is None:
+            listing = TransferListing(
+                player_id=player.id,
+                seller_club_id=None,
+                price=market_value,
+                currency="coins",
+                status="available",
+            )
+            session.add(listing)
+        else:
+            listing.seller_club_id = None
+            listing.price = market_value
+            listing.currency = "coins"
+            listing.status = "available"
+            listing.listed_at = now
+            listing.sold_at = None
 
         await session.commit()
 
