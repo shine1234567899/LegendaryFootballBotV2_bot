@@ -132,46 +132,137 @@ async def _create_league_schedule(
     season_id: int,
     club_ids: list[int],
 ):
+    """
+    Create the missing fixtures for this league/season.
+
+    IMPORTANT:
+    - Existing fixtures are never duplicated.
+    - Fixtures cancelled by /stopleague are reactivated when the league is
+      started again.
+    - If a new manager/club was added, only the newly required pairings are
+      created.
+    - One round spans TWO consecutive days.
+    - League rounds can start on ANY day.
+    """
     rounds = _build_rounds(club_ids)
 
-    # Do not create the same league schedule twice in the same season.
+    # Load every existing league fixture for this season. We intentionally
+    # inspect pairings instead of only counting rows: a count can be "full"
+    # while a particular home/away pairing is missing.
     existing_result = await session.execute(
-        select(func.count(Fixture.id))
+        select(Fixture, Match)
+        .join(
+            Match,
+            Match.fixture_id == Fixture.id,
+        )
         .where(
             Fixture.season_id == season_id,
             Fixture.competition_type == "league",
-            Fixture.home_club_id.in_(club_ids),
-            Fixture.away_club_id.in_(club_ids),
         )
     )
-    existing_count = int(existing_result.scalar() or 0)
 
+    existing_rows = list(existing_result.all())
+
+    # Only fixtures belonging to the requested league's current clubs.
+    club_set = set(club_ids)
+
+    existing_by_pair = {}
+    for fixture, match in existing_rows:
+        if (
+            fixture.home_club_id in club_set
+            and fixture.away_club_id in club_set
+        ):
+            existing_by_pair[
+                (fixture.home_club_id, fixture.away_club_id)
+            ] = (fixture, match)
+
+    # A league round has one fixture per club. With N clubs there are
+    # N-1 rounds in each leg and N*(N-1) fixtures in total.
     expected_count = len(club_ids) * (len(club_ids) - 1)
 
-    if existing_count >= expected_count:
-        return 0, len(rounds)
+    # Schedule base: continue from the latest existing league fixture when
+    # possible; otherwise start five minutes from now.
+    existing_dates = [
+        fixture.scheduled_at
+        for fixture, _ in existing_by_pair.values()
+        if fixture.scheduled_at is not None
+    ]
 
-    # If a partial schedule exists, do not silently duplicate it.
-    if existing_count > 0:
-        raise ValueError(
-            "This league already has a partial schedule for this season."
+    if existing_dates:
+        base_time = min(existing_dates)
+        base_time = base_time.replace(
+            hour=12,
+            minute=0,
+            second=0,
+            microsecond=0,
         )
+    else:
+        base_time = datetime.utcnow() + timedelta(minutes=5)
+        base_time = base_time.replace(
+            second=0,
+            microsecond=0,
+        )
+
+    # Every round occupies two consecutive calendar days.
+    first_day_count = (len(club_ids) // 2 + 1) // 2
+    second_day_count = (len(club_ids) // 2) - first_day_count
+
+    # For even N, first_day_count is ceil(matches_per_round / 2).
+    matches_per_round = len(club_ids) // 2
+    first_day_count = (matches_per_round + 1) // 2
+    second_day_count = matches_per_round - first_day_count
 
     created = 0
-    base_time = datetime.utcnow() + timedelta(minutes=5)
+    reactivated = 0
 
     for round_index, pairings in enumerate(rounds, start=1):
-        round_time = base_time + timedelta(
-            days=round_index - 1
+        round_start = base_time + timedelta(
+            days=(round_index - 1) * 2
         )
+
+        day_one = round_start
+        day_two = round_start + timedelta(days=1)
 
         for match_index, (home_id, away_id) in enumerate(
             pairings,
             start=1,
         ):
-            scheduled_at = round_time + timedelta(
-                minutes=(match_index - 1) * 5
+            if match_index <= first_day_count:
+                scheduled_at = day_one + timedelta(
+                    minutes=(match_index - 1) * 5
+                )
+            else:
+                second_index = match_index - first_day_count
+                scheduled_at = day_two + timedelta(
+                    minutes=(second_index - 1) * 5
+                )
+
+            pair = existing_by_pair.get(
+                (home_id, away_id)
             )
+
+            if pair is not None:
+                fixture, match = pair
+
+                # Restarting a stopped league resumes its already-created
+                # future fixtures instead of duplicating them.
+                if (
+                    str(fixture.status).lower()
+                    in {"cancelled", "canceled"}
+                    or str(match.status).lower()
+                    in {"cancelled", "canceled"}
+                ):
+                    fixture.status = "scheduled"
+                    match.status = "not_started"
+                    match.minute = 0
+                    match.home_score = 0
+                    match.away_score = 0
+                    reactivated += 1
+
+                # Keep the canonical round/date for this season.
+                fixture.round_number = round_index
+                fixture.scheduled_at = scheduled_at
+                continue
 
             fixture = Fixture(
                 season_id=season_id,
@@ -198,9 +289,19 @@ async def _create_league_schedule(
             )
 
             session.add(match)
+
+            existing_by_pair[
+                (home_id, away_id)
+            ] = (fixture, match)
+
             created += 1
 
-    return created, len(rounds)
+    return (
+        created,
+        reactivated,
+        len(rounds),
+        expected_count,
+    )
 
 
 async def _start_one_league(
@@ -227,7 +328,12 @@ async def _start_one_league(
     # Ensure the club records still point to this league.
     club_ids = [membership.club_id for membership in memberships]
 
-    created_fixtures, rounds = await _create_league_schedule(
+    (
+        created_fixtures,
+        reactivated_fixtures,
+        rounds,
+        expected_fixtures,
+    ) = await _create_league_schedule(
         session=session,
         league_id=league.id,
         season_id=season.id,
@@ -241,6 +347,8 @@ async def _start_one_league(
         "count": club_count,
         "started": True,
         "fixtures": created_fixtures,
+        "reactivated": reactivated_fixtures,
+        "expected_fixtures": expected_fixtures,
         "rounds": rounds,
     }
 
@@ -408,8 +516,10 @@ async def startleague(
                     f"📅 {season.name}\n"
                     f"👥 Clubs: {result_data['count']}\n"
                     f"📅 Rounds: {result_data['rounds']}\n"
-                    f"⚽ Fixtures: {result_data['fixtures']}\n\n"
-                    "🏠 Home and away matches have been created."
+                    f"⚽ New fixtures: {result_data['fixtures']}\n"
+                    f"🔄 Resumed fixtures: {result_data['reactivated']}\n"
+                    f"📊 Total required: {result_data['expected_fixtures']}\n\n"
+                    "🏠 Home and away matches are ready."
                 )
             )
             return
@@ -425,7 +535,8 @@ async def startleague(
         lines.append(
             f"✅ {item['league']} — "
             f"{item['count']} clubs • "
-            f"{item['fixtures']} fixtures"
+            f"+{item['fixtures']} new • "
+            f"↩️ {item['reactivated']} resumed"
         )
 
     if skipped:

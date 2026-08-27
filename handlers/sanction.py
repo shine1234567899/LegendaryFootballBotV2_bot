@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from telegram import Update
-from telegram.ext import CommandHandler, ContextTypes
+from telegram.ext import CommandHandler, MessageHandler, ContextTypes, filters
 from sqlalchemy import select
 
 from config import OWNER_IDS
@@ -185,3 +185,12 @@ async def sanction_guard(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 sanction_handler = CommandHandler("sanction", sanction)
 payfine_handler = CommandHandler("payfine", payfine)
+
+# IMPORTANT:
+# Register this handler BEFORE normal CommandHandlers in the same group.
+# It intercepts commands from sanctioned users and lets /payfine through.
+sanction_guard_handler = MessageHandler(
+    filters.COMMAND,
+    sanction_guard,
+)
+
