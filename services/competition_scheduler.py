@@ -10,7 +10,7 @@ from typing import Iterable
 #
 # Official V2 calendar:
 #
-#   LEAGUE        -> Friday / Saturday / Sunday
+#   LEAGUE        -> Every day (one round spans 2 consecutive days)
 #   LEAGUE EUROPE -> Monday / Tuesday
 #   CUP           -> Wednesday / Thursday
 #
@@ -20,7 +20,7 @@ from typing import Iterable
 # ==========================================================
 
 
-LEAGUE_DAYS = frozenset({4, 5, 6})        # Fri/Sat/Sun
+LEAGUE_DAYS = frozenset({0, 1, 2, 3, 4, 5, 6})  # Every day
 EUROPE_DAYS = frozenset({0, 1})           # Mon/Tue
 CUP_DAYS = frozenset({2, 3})              # Wed/Thu
 
@@ -127,12 +127,23 @@ def schedule_slots(
     timezone: str = DEFAULT_TIMEZONE,
 ) -> list[datetime]:
     """
-    Generate `count` kickoff slots using only the competition's
-    permitted weekdays.
+    Generate `count` kickoff slots.
 
-    Slots are five minutes apart. When a day is exhausted, the
-    scheduler moves to the next permitted day.
+    LEAGUE:
+        One league round is split across TWO days:
+        - Friday
+        - Saturday
 
+        The fixtures are divided as evenly as possible between
+        the two days. Sunday is not used for that same round.
+
+    LEAGUE EUROPE:
+        Monday / Tuesday.
+
+    CUP:
+        Wednesday / Thursday.
+
+    Slots on each day are five minutes apart.
     No fixtures are created here.
     """
     if count < 0:
@@ -142,26 +153,87 @@ def schedule_slots(
         return []
 
     if start is None:
-        start = datetime.now(
-            ZoneInfo(timezone)
+        start = datetime.now(ZoneInfo(timezone))
+
+    competition = competition_type.strip().lower()
+
+    # ----------------------------------------------------------
+    # LEAGUE: exactly TWO days for one round
+    # ----------------------------------------------------------
+    if competition in {
+        "league",
+        "domestic_league",
+        "national_league",
+    }:
+        # Find the next valid League day on/after the requested start.
+        # League is allowed every day, so this is simply the requested day.
+        current = start.replace(
+            second=0,
+            microsecond=0,
         )
 
+        # No weekday jump is required: League can run every day.
+        current = current.replace(
+            hour=DEFAULT_START_HOUR,
+            minute=DEFAULT_START_MINUTE,
+            second=0,
+            microsecond=0,
+        )
+
+        first_day_count = (count + 1) // 2
+        second_day_count = count // 2
+
+        slots: list[datetime] = []
+
+        # First day
+        day_start = current.replace(
+            hour=DEFAULT_START_HOUR,
+            minute=DEFAULT_START_MINUTE,
+        )
+
+        for index in range(first_day_count):
+            slots.append(
+                day_start
+                + timedelta(
+                    minutes=index * MATCH_INTERVAL_MINUTES
+                )
+            )
+
+        # Second consecutive day
+        saturday = (
+            current + timedelta(days=1)
+        ).replace(
+            hour=DEFAULT_START_HOUR,
+            minute=DEFAULT_START_MINUTE,
+            second=0,
+            microsecond=0,
+        )
+
+        for index in range(second_day_count):
+            slots.append(
+                saturday
+                + timedelta(
+                    minutes=index * MATCH_INTERVAL_MINUTES
+                )
+            )
+
+        return slots
+
+    # ----------------------------------------------------------
+    # EUROPE / CUP: preserve existing two-day calendar behavior
+    # ----------------------------------------------------------
     current = next_allowed_datetime(
         competition_type,
         start,
     )
 
-    allowed = allowed_weekdays(
-        competition_type
-    )
-
+    allowed = allowed_weekdays(competition_type)
     slots = []
 
     while len(slots) < count:
         if current.weekday() not in allowed:
             current = (
-                current
-                + timedelta(days=1)
+                current + timedelta(days=1)
             ).replace(
                 hour=DEFAULT_START_HOUR,
                 minute=DEFAULT_START_MINUTE,
@@ -174,19 +246,15 @@ def schedule_slots(
 
         current = (
             current
-            + timedelta(
-                minutes=MATCH_INTERVAL_MINUTES
-            )
+            + timedelta(minutes=MATCH_INTERVAL_MINUTES)
         )
 
-        # Once the date changes, jump to the next allowed day
-        # at the standard start time.
         if current.date() != slots[-1].date():
             next_day = current
+
             while next_day.weekday() not in allowed:
                 next_day = (
-                    next_day
-                    + timedelta(days=1)
+                    next_day + timedelta(days=1)
                 )
 
             current = next_day.replace(
@@ -259,7 +327,7 @@ def competition_day_name(
         "domestic_league",
         "national_league",
     }:
-        return "Friday / Saturday / Sunday"
+        return "Every day (2 consecutive days per round)"
 
     if competition in {
         "league_europe",

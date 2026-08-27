@@ -285,7 +285,7 @@ async def _render_calendar(
         [
             "",
             "📆 Competition calendar:",
-            "⚽ League → Friday / Saturday / Sunday",
+            "⚽ League → Every day • 1 round = 2 days",
             "🌍 Europe → Monday / Tuesday",
             "🏆 Cup → Wednesday / Thursday",
         ]

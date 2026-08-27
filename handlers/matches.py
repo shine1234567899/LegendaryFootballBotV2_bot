@@ -295,7 +295,7 @@ async def _render_matches(
 
     lines.append("")
     lines.append(
-        "📆 League: Friday / Saturday / Sunday"
+        "📆 League: Every day • 1 round = 2 days"
     )
     lines.append(
         "🌍 Europe: Monday / Tuesday"
