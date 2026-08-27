@@ -177,7 +177,7 @@ async def _release_now(
     if lineup_ids:
         await session.execute(
             SavedLineupPlayer.__table__.delete().where(
-                SavedLineupPlayer.lineup_id.in_(lineup_ids),
+                SavedLineupPlayer.saved_lineup_id.in_(lineup_ids),
                 SavedLineupPlayer.player_id == player.id,
             )
         )
@@ -388,7 +388,7 @@ async def release_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if lineup_ids:
             await session.execute(
                 SavedLineupPlayer.__table__.delete().where(
-                    SavedLineupPlayer.lineup_id.in_(lineup_ids),
+                    SavedLineupPlayer.saved_lineup_id.in_(lineup_ids),
                     SavedLineupPlayer.player_id == player.id,
                 )
             )
@@ -474,7 +474,6 @@ async def my_transfers(
             )
             .order_by(Player.overall.desc(), Player.name.asc())
         )
-
         rows = result.all()
 
     if not rows:
