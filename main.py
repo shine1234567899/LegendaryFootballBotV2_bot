@@ -593,7 +593,8 @@ def main():
 
     application.add_handler(sellplayer_handler)
     application.add_handler(releaseplayer_handler)
-    application.add_handler(release_callback_handler)
+    # Release callbacks must be handled before broad callback routers.
+    application.add_handler(release_callback_handler, group=-19)
     application.add_handler(mytransfers_handler)
 
     # ======================================================

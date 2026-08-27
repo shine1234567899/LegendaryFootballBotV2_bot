@@ -301,32 +301,36 @@ async def release_player(
     )
 
 
-async def release_callback(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-):
+
+async def release_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if query is None:
         return
 
     await query.answer()
+
     data = query.data or ""
-    user = query.from_user
+    if data == "release_cancel":
+        await query.edit_message_text("❌ Release cancelled.")
+        return
+
+    if ":" not in data:
+        return
+
+    action, raw_id = data.split(":", 1)
+    if action not in {"release_select", "release_confirm"}:
+        return
+
+    try:
+        player_id = int(raw_id)
+    except ValueError:
+        await query.edit_message_text("❌ Invalid player.")
+        return
 
     async with AsyncSessionLocal() as session:
-        club = await _manager_club(session, user.id)
+        club = await _manager_club(session, query.from_user.id)
         if club is None:
             await query.edit_message_text("❌ You don't have a club.")
-            return
-
-        if data == "release_cancel":
-            await query.edit_message_text("❌ Release cancelled.")
-            return
-
-        try:
-            player_id = int(data.split(":", 1)[1])
-        except (IndexError, ValueError):
-            await query.edit_message_text("❌ Invalid player.")
             return
 
         player = await session.get(Player, player_id)
@@ -347,14 +351,14 @@ async def release_callback(
             )
             return
 
-        if data.startswith("release_select:"):
+        if action == "release_select":
             await query.edit_message_text(
                 "⚠️ 𝐂𝐎𝐍𝐅𝐈𝐑𝐌 𝐑𝐄𝐋𝐄𝐀𝐒𝐄\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
                 f"⚽ {player.name}\n"
                 f"⭐ Overall: {player.overall}\n"
                 f"🏟️ {club.name}\n\n"
-                "The player will leave your squad and lineup.",
+                "Are you sure you want to release this player?",
                 reply_markup=InlineKeyboardMarkup([
                     [
                         InlineKeyboardButton(
@@ -370,38 +374,93 @@ async def release_callback(
             )
             return
 
-        if data.startswith("release_confirm:"):
-            ok, result = await _release_now(
-                session,
-                club,
-                player,
+        now = datetime.now(timezone.utc)
+        ownership.is_current = False
+        ownership.left_at = now
+
+        lineup_rows = await session.execute(
+            select(SavedLineup.id).where(
+                SavedLineup.club_id == club.id
+            )
+        )
+        lineup_ids = [row[0] for row in lineup_rows.all()]
+
+        if lineup_ids:
+            await session.execute(
+                SavedLineupPlayer.__table__.delete().where(
+                    SavedLineupPlayer.lineup_id.in_(lineup_ids),
+                    SavedLineupPlayer.player_id == player.id,
+                )
             )
 
-            if not ok:
-                await query.edit_message_text(result)
-                return
+        contracts = await session.execute(
+            select(PlayerContract).where(
+                PlayerContract.club_id == club.id,
+                PlayerContract.player_id == player.id,
+                PlayerContract.active.is_(True),
+            )
+        )
+        for contract in contracts.scalars().all():
+            contract.active = False
 
-            await query.edit_message_text(
-                "❌ 𝐏𝐋𝐀𝐘𝐄𝐑 𝐑𝐄𝐋𝐄𝐀𝐒𝐄𝐃\n"
-                "━━━━━━━━━━━━━━━━━━━━\n"
-                f"⚽ {player.name}\n"
-                f"⭐ Overall: {player.overall}\n"
-                f"💰 Market value: {result:,} Coins\n\n"
-                "✅ Removed from the squad.\n"
-                "✅ Removed from the lineup.\n"
-                "✅ Contract deactivated.\n"
-                "🔄 Player is now available on the market."
+        market_value = max(int(player.value or 0), 1)
+
+        listing = await session.scalar(
+            select(TransferListing).where(
+                TransferListing.player_id == player.id,
+                TransferListing.status.in_(["available", "active"]),
+            )
+        )
+
+        if listing is None:
+            session.add(
+                TransferListing(
+                    player_id=player.id,
+                    seller_club_id=None,
+                    price=market_value,
+                    currency="coins",
+                    status="available",
+                )
             )
 
+        await session.commit()
 
-async def my_transfers(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await query.edit_message_text(
+        "❌ 𝐏𝐋𝐀𝐘𝐄𝐑 𝐑𝐄𝐋𝐄𝐀𝐒𝐄𝐃\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"⚽ {player.name}\n"
+        f"⭐ Overall: {player.overall}\n"
+        f"💰 Market value: {market_value:,} Coins\n\n"
+        "✅ Removed from the squad.\n"
+        "✅ Removed from the lineup.\n"
+        "✅ Contract deactivated.\n"
+        "🔄 Player is now available on the market."
+    )
+
+release_callback_handler = CallbackQueryHandler(
+    release_callback,
+    pattern=r"^(release_select|release_confirm):\d+$|^release_cancel$",
+)
+
+
+
+# ==========================================================
+# MY TRANSFERS
+# ==========================================================
+
+async def my_transfers(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
     message = update.effective_message
     user = update.effective_user
+
     if message is None or user is None:
         return
 
     async with AsyncSessionLocal() as session:
         club = await _manager_club(session, user.id)
+
         if club is None:
             await message.reply_text("❌ You don't have a club.")
             return
@@ -413,8 +472,9 @@ async def my_transfers(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 TransferListing.seller_club_id == club.id,
                 TransferListing.status.in_(["available", "active"]),
             )
-            .order_by(Player.name.asc())
+            .order_by(Player.overall.desc(), Player.name.asc())
         )
+
         rows = result.all()
 
     if not rows:
@@ -430,6 +490,7 @@ async def my_transfers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "━━━━━━━━━━━━━━━━━━━━",
         "",
     ]
+
     for index, (listing, player) in enumerate(rows, 1):
         lines.extend([
             f"{index}. ⚽ {player.name}",
@@ -437,14 +498,30 @@ async def my_transfers(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"   💰 {listing.price:,} Coins",
             "",
         ])
+
     await message.reply_text("\n".join(lines))
 
+# ==========================================================
+# HANDLER EXPORTS
+# ==========================================================
 
-sellplayer_handler = CommandHandler("sellplayer", sell_player)
-releaseplayer_handler = CommandHandler("releaseplayer", release_player)
-mytransfers_handler = CommandHandler("mytransfers", my_transfers)
+sellplayer_handler = CommandHandler(
+    "sellplayer",
+    sell_player,
+)
+
+releaseplayer_handler = CommandHandler(
+    "releaseplayer",
+    release_player,
+)
+
+mytransfers_handler = CommandHandler(
+    "mytransfers",
+    my_transfers,
+)
 
 release_callback_handler = CallbackQueryHandler(
     release_callback,
-    pattern=r"^release_(select|confirm):\d+$|^release_cancel$",
+    pattern=r"^(release_select|release_confirm):\d+$|^release_cancel$",
 )
+
