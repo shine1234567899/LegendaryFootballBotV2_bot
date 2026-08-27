@@ -21,6 +21,9 @@ from database.models import (
     Player,
     TransferListing,
     Transaction,
+    PlayerContract,
+    SavedLineup,
+    SavedLineupPlayer,
 )
 from handlers.manager_contracts import ensure_player_contract
 
@@ -433,29 +436,77 @@ async def transfermarket_callback(
                 user.coins -= listing.price
 
             # ==============================
-            # Ajout du joueur au club
+            # TRANSFER OWNERSHIP CLEANLY
             # ==============================
+            now = datetime.now(timezone.utc)
 
-            club_player = ClubPlayer(
-                club_id=club.id,
-                player_id=player.id,
-                joined_at=datetime.now(timezone.utc),
-                is_current=True,
+            # A player can only belong to one current club.
+            old_result = await session.execute(
+                select(ClubPlayer).where(
+                    ClubPlayer.player_id == player.id,
+                    ClubPlayer.is_current.is_(True),
+                    ClubPlayer.club_id != club.id,
+                )
             )
 
-            session.add(club_player)
+            for old_ownership in old_result.scalars().all():
+                old_ownership.is_current = False
+                old_ownership.left_at = now
+
+                # Remove the player from saved lineups of the old club.
+                lineup_result = await session.execute(
+                    select(SavedLineup.id).where(
+                        SavedLineup.club_id == old_ownership.club_id
+                    )
+                )
+                lineup_ids = [row[0] for row in lineup_result.all()]
+                if lineup_ids:
+                    await session.execute(
+                        SavedLineupPlayer.__table__.delete().where(
+                            SavedLineupPlayer.lineup_id.in_(lineup_ids),
+                            SavedLineupPlayer.player_id == player.id,
+                        )
+                    )
+
+                # Disable the old club's active contract.
+                contract_result = await session.execute(
+                    select(PlayerContract).where(
+                        PlayerContract.club_id == old_ownership.club_id,
+                        PlayerContract.player_id == player.id,
+                        PlayerContract.active.is_(True),
+                    )
+                )
+                for old_contract in contract_result.scalars().all():
+                    old_contract.active = False
+
+            # Reuse an old inactive ownership row if one exists.
+            buyer_ownership = await session.scalar(
+                select(ClubPlayer).where(
+                    ClubPlayer.club_id == club.id,
+                    ClubPlayer.player_id == player.id,
+                )
+            )
+
+            if buyer_ownership is None:
+                buyer_ownership = ClubPlayer(
+                    club_id=club.id,
+                    player_id=player.id,
+                    joined_at=now,
+                    is_current=True,
+                )
+                session.add(buyer_ownership)
+            else:
+                buyer_ownership.is_current = True
+                buyer_ownership.left_at = None
+                buyer_ownership.joined_at = now
+
             await session.flush()
 
-            # Contrat initial automatique pour tout nouveau joueur.
-            await ensure_player_contract(
-                session,
-                club.id,
-                player.id,
-            )
+            # Create the buyer's contract if missing.
+            await ensure_player_contract(session, club.id, player.id)
 
-            # Listing vendu
             listing.status = "sold"
-            listing.sold_at = datetime.now(timezone.utc)
+            listing.sold_at = now
 
             # Transaction
             transaction = Transaction(

@@ -13,6 +13,8 @@ from database.models import (
     Player,
     PlayerContract,
     TransferListing,
+    SavedLineup,
+    SavedLineupPlayer,
 )
 
 
@@ -313,10 +315,39 @@ async def release_player(
             1,
         )
 
-        # Create the release listing first.
-        # Ownership is preserved until the market transaction actually
-        # completes. This prevents a failed release from removing the
-        # player from the squad.
+        now = datetime.now(timezone.utc)
+
+        # Release really removes the player from this club.
+        club_player.is_current = False
+        club_player.left_at = now
+
+        # Remove him from every saved lineup of this club.
+        lineup_result = await session.execute(
+            select(SavedLineup.id).where(
+                SavedLineup.club_id == club.id
+            )
+        )
+        lineup_ids = [row[0] for row in lineup_result.all()]
+        if lineup_ids:
+            await session.execute(
+                SavedLineupPlayer.__table__.delete().where(
+                    SavedLineupPlayer.lineup_id.in_(lineup_ids),
+                    SavedLineupPlayer.player_id == player.id,
+                )
+            )
+
+        # Deactivate all active contracts for the released player.
+        contract_result = await session.execute(
+            select(PlayerContract).where(
+                PlayerContract.club_id == club.id,
+                PlayerContract.player_id == player.id,
+                PlayerContract.active.is_(True),
+            )
+        )
+        for contract in contract_result.scalars().all():
+            contract.active = False
+
+        # Free player: no seller club. He becomes available on the market.
         session.add(
             TransferListing(
                 player_id=player.id,

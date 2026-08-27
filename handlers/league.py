@@ -1059,12 +1059,95 @@ async def league_callback(
                 )
 
             elif action == "fixtures":
-                caption = (
-                    "📅 𝐋𝐄𝐀𝐆𝐔𝐄 𝐅𝐈𝐗𝐓𝐔𝐑𝐄𝐒\n"
-                    "━━━━━━━━━━━━━━━━━━━━\n"
-                    "Fixture display will be connected to "
-                    "the league scheduler."
+                # Show the real league fixtures for this club/season.
+                from database.models import Fixture, Match
+
+                fixture_result = await session.execute(
+                    select(Fixture, Match)
+                    .join(
+                        Match,
+                        Match.fixture_id == Fixture.id,
+                    )
+                    .where(
+                        Fixture.season_id == season.id,
+                        Fixture.competition_type == "league",
+                        (
+                            (Fixture.home_club_id == club.id)
+                            | (Fixture.away_club_id == club.id)
+                        ),
+                    )
+                    .order_by(
+                        Fixture.scheduled_at.asc(),
+                        Fixture.id.asc(),
+                    )
                 )
+
+                fixtures = list(fixture_result.all())
+
+                if not fixtures:
+                    caption = (
+                        "📅 𝐋𝐄𝐀𝐆𝐔𝐄 𝐅𝐈𝐗𝐓𝐔𝐑𝐄𝐒\n"
+                        "━━━━━━━━━━━━━━━━━━━━\n"
+                        "📭 No league matches scheduled yet."
+                    )
+                else:
+                    club_ids = {
+                        fixture.home_club_id
+                        for fixture, _ in fixtures
+                    } | {
+                        fixture.away_club_id
+                        for fixture, _ in fixtures
+                    }
+
+                    club_result = await session.execute(
+                        select(Club).where(Club.id.in_(club_ids))
+                    )
+                    club_names = {
+                        item.id: item.name
+                        for item in club_result.scalars().all()
+                    }
+
+                    lines = [
+                        "📅 𝐋𝐄𝐀𝐆𝐔𝐄 𝐅𝐈𝐗𝐓𝐔𝐑𝐄𝐒",
+                        "━━━━━━━━━━━━━━━━━━━━",
+                        f"🏆 {season.name}",
+                        "",
+                    ]
+
+                    for fixture, match in fixtures:
+                        home = club_names.get(
+                            fixture.home_club_id,
+                            f"Club #{fixture.home_club_id}",
+                        )
+                        away = club_names.get(
+                            fixture.away_club_id,
+                            f"Club #{fixture.away_club_id}",
+                        )
+
+                        status = str(match.status).lower()
+                        if status in {"finished", "completed"}:
+                            result_text = (
+                                f"📊 {match.home_score} - {match.away_score}"
+                            )
+                        elif status in {"live", "in_progress", "playing"}:
+                            result_text = (
+                                f"🔴 LIVE {match.home_score} - "
+                                f"{match.away_score} • {match.minute}'"
+                            )
+                        elif status == "cancelled":
+                            result_text = "🚫 CANCELLED"
+                        else:
+                            result_text = "⏳ NOT STARTED"
+
+                        lines.append(
+                            f"📆 {fixture.scheduled_at.strftime('%d/%m/%Y')}"
+                            f" • {fixture.scheduled_at.strftime('%H:%M')}\n"
+                            f"🏟️ {home} vs {away}\n"
+                            f"🔢 Round {fixture.round_number or '-'} • "
+                            f"{result_text}\n"
+                        )
+
+                    caption = "\n".join(lines)
 
             else:
                 caption = (

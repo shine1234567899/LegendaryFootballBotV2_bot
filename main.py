@@ -183,7 +183,7 @@ from handlers.manager_sponsors import (
 )
 from handlers.users_owner import users_handler
 from handlers.sanction import sanction_handler, payfine_handler
-
+from handlers.stopleague import stopleague_handler
 
 
 # ==========================================================
@@ -516,6 +516,7 @@ def main():
     application.add_handler(
     league_europe_handler
 )
+    application.add_handler(stopleague_handler)
     application.add_handler(startcup_handler)
     application.add_handler(cupmatches_handler)
     application.add_handler(cupnextround_handler)

@@ -23,6 +23,20 @@ from database.models import (
 DEFAULT_SALARY = 100_000
 DEFAULT_DURATION_DAYS = 30
 
+SALARY_BY_OVERALL = (
+    (95, 2_000_000),
+    (90, 1_000_000),
+    (85, 500_000),
+    (80, 250_000),
+    (0, 100_000),
+)
+
+def salary_from_overall(overall: int) -> int:
+    for minimum, salary in SALARY_BY_OVERALL:
+        if overall >= minimum:
+            return salary
+    return 100_000
+
 
 async def _get_manager_club(session, user_id: int):
     result = await session.execute(
@@ -122,14 +136,16 @@ async def create_contract_command(
 
     # The last two arguments are optional numeric values.
     args = context.args[:]
-    salary = DEFAULT_SALARY
+    salary = None
     duration_days = DEFAULT_DURATION_DAYS
 
+    explicit_salary = False
     if len(args) >= 2:
         try:
             salary = int(args[-2])
             duration_days = int(args[-1])
             player_name = " ".join(args[:-2]).strip()
+            explicit_salary = True
         except ValueError:
             player_name = " ".join(args).strip()
     else:
@@ -139,9 +155,9 @@ async def create_contract_command(
         await message.reply_text("❌ Player name is required.")
         return
 
-    if salary <= 0 or duration_days <= 0:
+    if duration_days <= 0:
         await message.reply_text(
-            "❌ Salary and duration must be greater than 0."
+            "❌ Duration must be greater than 0."
         )
         return
 
@@ -167,6 +183,17 @@ async def create_contract_command(
             return
 
         _, player = row
+
+        # If the manager does not explicitly provide a salary, calculate it
+        # from the player's Overall. Explicit negotiated salaries are kept.
+        if not explicit_salary:
+            salary = salary_from_overall(int(player.overall or 0))
+
+        if salary <= 0:
+            await message.reply_text(
+                "❌ Salary must be greater than 0."
+            )
+            return
 
         existing = await session.scalar(
             select(PlayerContract).where(

@@ -180,8 +180,7 @@ async def _fixture_news(
             Match.fixture_id == Fixture.id,
         )
         .where(
-            Fixture.competition_type
-            == competition_type
+            Fixture.competition_type == competition_type
         )
         .order_by(
             Fixture.scheduled_at.desc(),
@@ -193,17 +192,31 @@ async def _fixture_news(
     rows = list(result.all())
 
     club_ids = [
-        fixture.home_club_id
-        for fixture, match in rows
+        fixture.home_club_id for fixture, _ in rows
     ] + [
-        fixture.away_club_id
-        for fixture, match in rows
+        fixture.away_club_id for fixture, _ in rows
     ]
 
     names = await _club_names(
         session,
         list(set(club_ids)),
     )
+
+    # For league news we need the current table after the match.
+    memberships = {}
+    if competition_type == "league":
+        membership_result = await session.execute(
+            select(LeagueSeasonClub).where(
+                LeagueSeasonClub.club_id.in_(list(set(club_ids)))
+            )
+        )
+        for membership in membership_result.scalars().all():
+            key = (
+                membership.season_id,
+                membership.league_id,
+                membership.club_id,
+            )
+            memberships[key] = membership
 
     news = []
 
@@ -217,23 +230,126 @@ async def _fixture_news(
             f"Club #{fixture.away_club_id}",
         )
 
-        status = str(
-            match.status
-        ).lower()
+        status = str(match.status).lower()
 
-        if status in {
-            "finished",
-            "completed",
-        }:
-            text = (
-                f"{label} : {home} "
-                f"{match.home_score}–"
-                f"{match.away_score} {away}"
+        if status not in {"finished", "completed"}:
+            news.append(
+                (
+                    fixture.scheduled_at,
+                    f"{label} : {home} vs {away}",
+                )
             )
+            continue
+
+        hs = int(match.home_score or 0)
+        aws = int(match.away_score or 0)
+
+        # --------------------------------------------------
+        # DRAW
+        # --------------------------------------------------
+        if hs == aws:
+            text = (
+                f"🔥 Match très dur entre {home} et {away} "
+                f"qui se quittent sur un {hs}-{aws}."
+            )
+
+        # --------------------------------------------------
+        # WIN BY 3+ GOALS
+        # --------------------------------------------------
+        elif abs(hs - aws) >= 3:
+            if hs > aws:
+                winner = home
+                loser = away
+                score = f"{hs}-{aws}"
+            else:
+                winner = away
+                loser = home
+                score = f"{aws}-{hs}"
+
+            text = (
+                f"💥 Domination totale du {winner} qui "
+                f"inflige une correction {score} au {loser}."
+            )
+
+        # --------------------------------------------------
+        # WIN BY 1-2 GOALS
+        # --------------------------------------------------
         else:
+            if hs > aws:
+                winner = home
+                loser = away
+                score = f"{hs}-{aws}"
+            else:
+                winner = away
+                loser = home
+                score = f"{aws}-{hs}"
+
             text = (
-                f"{label} : {home} vs {away}"
+                f"✅ Très bonne opération pour le {winner} "
+                f"qui s'impose {score} face au {loser}."
             )
+
+        # --------------------------------------------------
+        # LEAGUE-SPECIFIC INFORMATION
+        # --------------------------------------------------
+        if competition_type == "league" and hs != aws:
+            winner_club_id = (
+                fixture.home_club_id
+                if hs > aws
+                else fixture.away_club_id
+            )
+            winner_side_is_away = (
+                winner_club_id == fixture.away_club_id
+            )
+
+            # Find the membership for this exact fixture.
+            winner_membership = None
+            for membership in memberships.values():
+                if (
+                    membership.club_id == winner_club_id
+                    and membership.league_id == getattr(
+                        fixture,
+                        "league_id",
+                        membership.league_id,
+                    )
+                ):
+                    winner_membership = membership
+                    break
+
+            # If fixture doesn't carry league_id, use the most
+            # recently stored membership for the winner.
+            if winner_membership is None:
+                candidates = [
+                    membership
+                    for membership in memberships.values()
+                    if membership.club_id == winner_club_id
+                ]
+                if candidates:
+                    winner_membership = max(
+                        candidates,
+                        key=lambda item: (
+                            int(item.season_id or 0),
+                            int(item.league_id or 0),
+                        ),
+                    )
+
+            if winner_side_is_away:
+                text += (
+                    f" Bonne opération pour {winner} qui "
+                    f"ramène 3 points de l'extérieur."
+                )
+            else:
+                text += (
+                    f" {winner} empoche 3 points à domicile."
+                )
+
+            if (
+                winner_membership is not None
+                and winner_membership.position == 1
+            ):
+                text += (
+                    f" {winner} passe premier au classement."
+                )
 
         news.append(
             (
@@ -442,6 +558,14 @@ async def news(
                 session,
                 "league",
                 "🏆 League",
+            )
+        )
+
+        events.extend(
+            await _fixture_news(
+                session,
+                "friendly",
+                "🤝 Friendly",
             )
         )
 

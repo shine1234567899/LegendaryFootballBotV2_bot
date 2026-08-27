@@ -299,6 +299,24 @@ async def pay_all_due_salaries():
     }
 
 
+
+async def sync_default_salaries() -> int:
+    """Update legacy 100,000/day contracts to the current Overall salary tier."""
+    changed = 0
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(PlayerContract, Player)
+            .join(Player, Player.id == PlayerContract.player_id)
+            .where(PlayerContract.active.is_(True), PlayerContract.salary == INITIAL_SALARY)
+        )
+        for contract, player in result.all():
+            new_salary = initial_contract_salary(player)
+            if new_salary != contract.salary:
+                contract.salary = new_salary
+                changed += 1
+        await session.commit()
+    return changed
+
 async def contracts_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show every current squad player and his active contract."""
     user = update.effective_user
