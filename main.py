@@ -166,6 +166,7 @@ from handlers.manager_transfers_contracts import (
     sellplayer_handler,
     releaseplayer_handler,
     mytransfers_handler,
+    release_callback_handler,
 )
 from handlers.manager_ballondor import (
     nomined_handler,
@@ -592,6 +593,7 @@ def main():
 
     application.add_handler(sellplayer_handler)
     application.add_handler(releaseplayer_handler)
+    application.add_handler(release_callback_handler)
     application.add_handler(mytransfers_handler)
 
     # ======================================================
