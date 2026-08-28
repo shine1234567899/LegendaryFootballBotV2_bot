@@ -185,6 +185,10 @@ from handlers.manager_sponsors import (
 from handlers.users_owner import users_handler
 from handlers.sanction import sanction_handler, payfine_handler
 from handlers.stopleague import stopleague_handler
+from handlers.football_admin_tools import (
+    cancel_pending_handler,
+    clear_market_handler,
+)
 
 
 # ==========================================================
@@ -444,6 +448,21 @@ def main():
 
     application.add_handler(
         transfermarket_callback_handler
+    )
+        # ======================================================
+    # FOOTBALL ADMIN — MATCHES / MARKET
+    # ======================================================
+
+    # Manager : annule tous ses matchs PENDING,
+    # y compris ceux créés avant la commande.
+    application.add_handler(
+        cancel_pending_handler
+    )
+
+    # Owner uniquement : vide le marché actuel.
+    # Les joueurs restent disponibles pour /refillmarket.
+    application.add_handler(
+        clear_market_handler
     )
 
     # ======================================================
