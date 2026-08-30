@@ -1137,6 +1137,18 @@ async def ensure_life_world_migrations() -> None:
         # canonical current level.
         # ----------------------------------------------------------
         migration_columns = {
+            "username": (
+                "ALTER TABLE life_characters "
+                "ADD COLUMN username VARCHAR(80)"
+            ),
+            "last_study_at": (
+                "ALTER TABLE life_characters "
+                "ADD COLUMN last_study_at TIMESTAMPTZ"
+            ),
+            "last_work_at": (
+                "ALTER TABLE life_characters "
+                "ADD COLUMN last_work_at TIMESTAMPTZ"
+            ),
             "school_class": (
                 "ALTER TABLE life_characters "
                 "ADD COLUMN school_class VARCHAR(80)"
@@ -1190,11 +1202,25 @@ async def ensure_life_world_migrations() -> None:
                 SET school_class = CASE
                     WHEN education_level ILIKE '%primaire%' THEN 'CM2'
                     WHEN education_level ILIKE '%collège%' THEN '3e'
+                    WHEN education_level ILIKE '%lycée%' AND (
+                        current_diploma ILIKE '%baccalaur%'
+                        OR diploma_level ILIKE '%baccalaur%'
+                    ) THEN 'Terminale'
                     WHEN education_level ILIKE '%lycée%' THEN 'Première'
-                    WHEN education_level ILIKE '%terminal%' THEN 'Terminale'
-                    ELSE school_class
+                    WHEN education_level ILIKE '%univers%' OR education_level ILIKE '%supérieur%' THEN 'Université'
+                    ELSE COALESCE(school_class, 'CM2')
+                END,
+                current_diploma = CASE
+                    WHEN education_level ILIKE '%primaire%' THEN COALESCE(NULLIF(current_diploma, ''), 'CEP')
+                    WHEN education_level ILIKE '%collège%' THEN COALESCE(NULLIF(current_diploma, ''), 'BEPC')
+                    WHEN education_level ILIKE '%lycée%' AND (
+                        current_diploma ILIKE '%baccalaur%'
+                        OR diploma_level ILIKE '%baccalaur%'
+                    ) THEN COALESCE(NULLIF(current_diploma, ''), 'Baccalauréat')
+                    WHEN education_level ILIKE '%lycée%' THEN COALESCE(NULLIF(current_diploma, ''), 'Probatoire')
+                    WHEN education_level ILIKE '%univers%' OR education_level ILIKE '%supérieur%' THEN NULL
+                    ELSE current_diploma
                 END
-                WHERE school_class IS NULL
                 """
             )
         )

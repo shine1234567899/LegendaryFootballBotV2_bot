@@ -33,6 +33,7 @@ from __future__ import annotations
 import random
 import uuid
 from typing import Any
+from datetime import datetime, timezone
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
@@ -555,6 +556,33 @@ QUESTIONS: dict[str, dict[str, list[dict[str, Any]]]] = {
 }
 
 
+EXAM_COOLDOWN_SECONDS = 24 * 60 * 60
+
+
+def _school_level_from_exam_type(exam_type: str) -> tuple[str, str, str | None]:
+    mapping = {
+        "primary": ("Collège", "3e", "BEPC"),
+        "college": ("Lycée", "Première", "Probatoire"),
+        "probatoire": ("Lycée", "Terminale", "Baccalauréat"),
+        "baccalaureat": ("Études supérieures", "Université", None),
+        "university": ("Études supérieures", "Université", None),
+    }
+    return mapping[exam_type]
+
+
+async def _can_start_exam(character_id: int):
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(text("SELECT school_last_exam_at FROM life_characters WHERE id=:id"), {"id": character_id})
+        row = result.mappings().first()
+        last = row["school_last_exam_at"] if row else None
+    if last is None:
+        return True, 0
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)
+    remaining = EXAM_COOLDOWN_SECONDS - int((datetime.now(timezone.utc) - last).total_seconds())
+    return remaining <= 0, max(0, remaining)
+
+
 # ============================================================
 # SESSION
 # ============================================================
@@ -580,7 +608,8 @@ def get_exam_type(character) -> str:
 
 def get_domain(character) -> str:
     value = (
-        character.get("domain")
+        character.get("education_domain")
+        or character.get("domain")
         or character.get("school_domain")
         or ""
     )
@@ -639,6 +668,15 @@ async def domain_exam_command(
 
     exam_type = get_exam_type(character)
     domain = get_domain(character)
+
+    allowed, remaining = await _can_start_exam(int(character["id"]))
+    if not allowed:
+        await message.reply_text(
+            "⏳ **EXAMEN INDISPONIBLE**\n\n"
+            f"Tu dois attendre **{remaining // 3600}h {(remaining % 3600) // 60:02d}min** avant de repasser un examen.",
+            parse_mode="Markdown",
+        )
+        return
 
     if exam_type != "primary" and domain == "general":
         await message.reply_text(
@@ -888,10 +926,63 @@ async def finish_exam(
         parse_mode="Markdown",
     )
 
-    # La progression officielle et l'enregistrement du diplôme
-    # restent dans education.py. Ici on enregistre seulement le
-    # résultat de la session.
     async with AsyncSessionLocal() as db:
+        now = datetime.now(timezone.utc)
+
+        await db.execute(
+            text(
+                """
+                UPDATE life_characters
+                SET school_last_exam_at=:now,
+                    updated_at=NOW()
+                WHERE id=:character_id
+                """
+            ),
+            {"now": now, "character_id": character_id},
+        )
+
+        if passed:
+            next_level, next_class, next_diploma = _school_level_from_exam_type(exam_type)
+
+            if exam_type == "primary":
+                current_level = "Collège"
+            elif exam_type == "college":
+                current_level = "Lycée"
+            elif exam_type == "probatoire":
+                current_level = "Lycée"
+            elif exam_type == "baccalaureat":
+                current_level = "Études supérieures"
+            else:
+                current_level = "Études supérieures"
+
+            await db.execute(
+                text(
+                    """
+                    UPDATE life_characters
+                    SET education_level=:education_level,
+                        school_class=:school_class,
+                        current_diploma=:current_diploma,
+                        diploma_level=:current_diploma,
+                        school_xp=0,
+                        school_xp_required=CASE
+                            WHEN :education_level ILIKE '%collège%' THEN 150
+                            WHEN :education_level ILIKE '%lycée%' AND :school_class='Première' THEN 200
+                            WHEN :education_level ILIKE '%lycée%' AND :school_class='Terminale' THEN 250
+                            WHEN :education_level ILIKE '%univers%' THEN 500
+                            ELSE 100
+                        END,
+                        updated_at=NOW()
+                    WHERE id=:character_id
+                    """
+                ),
+                {
+                    "education_level": next_level,
+                    "school_class": next_class,
+                    "current_diploma": next_diploma,
+                    "character_id": character_id,
+                },
+            )
+
         await db.execute(
             text(
                 """

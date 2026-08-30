@@ -444,6 +444,9 @@ from handlers.football_admin_tools import (
     cancel_pending_handler,
     clear_market_handler,
 )
+from life_world.handlers.work import (
+    work_handler,
+)
 
 
 # ==========================================================
@@ -1147,7 +1150,7 @@ def main():
         .post_init(post_init)
         .build()
     )
-
+    
     # ======================================================
     # [LFB] GLOBAL / PRIORITY CALLBACKS
     # ======================================================
@@ -1209,6 +1212,13 @@ def main():
     # MWL company-contract command uses /contract_mwl while
     # the remaining MWL company-contract commands keep their
     # original names.
+        # ======================================================
+    # [MWL] WORK
+    # ======================================================
+
+    application.add_handler(
+        work_handler
+    )
     application.add_handler(
         CommandHandler(
             "contracts",

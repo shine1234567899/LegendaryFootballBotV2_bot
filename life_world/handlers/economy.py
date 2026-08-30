@@ -128,9 +128,10 @@ async def paylife(
     """
     Player-to-player Life Coins transfer:
 
-        /paylife <telegram_id> <amount>
+        /paylife @username <amount>
 
-    The sender must have enough Life Coins.
+    The receiver is resolved by the MANUWORLD username, never by
+    Telegram numeric ID.
     """
     message = update.effective_message
     user = update.effective_user
@@ -143,18 +144,27 @@ async def paylife(
             "💸 𝐏𝐀𝐘 𝐋𝐈𝐅𝐄\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             "Utilisation :\n"
-            "/paylife <telegram_id> <montant>\n\n"
+            "/paylife @username <montant>\n\n"
             "Exemple :\n"
-            "/paylife 123456789 500"
+            "/paylife @shine 500"
         )
         return
 
+    target_username = context.args[0].strip().lstrip("@").lower()
+
     try:
-        target_id = int(context.args[0])
-        amount = int(context.args[1])
+        amount = int(
+            context.args[1].replace(" ", "").replace(",", "")
+        )
     except ValueError:
         await message.reply_text(
-            "❌ L'ID Telegram et le montant doivent être numériques."
+            "❌ Le montant doit être numérique."
+        )
+        return
+
+    if not target_username:
+        await message.reply_text(
+            "❌ Username invalide."
         )
         return
 
@@ -164,15 +174,22 @@ async def paylife(
         )
         return
 
-    if target_id == user.id:
-        await message.reply_text(
-            "❌ Tu ne peux pas te payer toi-même."
-        )
-        return
-
     async with AsyncSessionLocal() as session:
         sender = await _get_character(session, user.id)
-        receiver = await _get_character(session, target_id)
+
+        receiver_result = await session.execute(
+            text(
+                """
+                SELECT id, telegram_id, first_name, username, balance
+                FROM life_characters
+                WHERE LOWER(REPLACE(COALESCE(username, ''), '@', ''))
+                    = :username
+                LIMIT 1
+                """
+            ),
+            {"username": target_username},
+        )
+        receiver = receiver_result.mappings().first()
 
         if sender is None:
             await message.reply_text(
@@ -183,11 +200,16 @@ async def paylife(
 
         if receiver is None:
             await message.reply_text(
-                "❌ Le destinataire n'a pas de personnage MANUWORLD."
+                f"❌ Le joueur @{target_username} n'a pas été trouvé."
             )
             return
 
-        # Atomic balance check/update prevents negative balances.
+        if int(receiver["telegram_id"]) == int(user.id):
+            await message.reply_text(
+                "❌ Tu ne peux pas te payer toi-même."
+            )
+            return
+
         result = await session.execute(
             text(
                 """
@@ -215,18 +237,18 @@ async def paylife(
                 """
                 UPDATE life_characters
                 SET balance = balance + :amount
-                WHERE telegram_id = :receiver_id
+                WHERE id = :receiver_id
                 """
             ),
             {
                 "amount": amount,
-                "receiver_id": target_id,
+                "receiver_id": int(receiver["id"]),
             },
         )
 
         await session.commit()
 
-        result = await session.execute(
+        balance_result = await session.execute(
             text(
                 """
                 SELECT balance
@@ -236,13 +258,15 @@ async def paylife(
             ),
             {"telegram_id": user.id},
         )
-        sender_balance = result.scalar_one()
+        sender_balance = balance_result.scalar_one()
+
+    receiver_name = receiver["first_name"] or f"@{target_username}"
 
     await message.reply_text(
         "💸 𝐏𝐀𝐘𝐌𝐄𝐍𝐓 𝐒𝐄𝐍𝐓\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         f"👤 From : {sender['first_name']}\n"
-        f"➡️ To : {receiver['first_name']}\n"
+        f"➡️ To : {receiver_name} (@{target_username})\n"
         f"💰 Amount : {amount:,} LC\n"
         f"💵 Remaining balance : {sender_balance:,} LC"
     )

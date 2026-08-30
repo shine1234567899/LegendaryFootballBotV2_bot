@@ -32,7 +32,8 @@ from telegram.ext import (
 from life_world.database import get_life_character
 
 from life_world.systems.lifestyle_stats_system import (
-    get_lifestyle_stats,
+    get_stats,
+    ensure_player_stats,
 )
 
 
@@ -148,65 +149,51 @@ def format_lifestyle_stats(
 
     happiness = stats.get(
         "happiness",
-        stats.get(
-            "happiness_score",
-            0,
-        ),
+        stats.get("joy", 0),
     )
 
     energy = stats.get(
         "energy",
-        stats.get(
-            "energy_score",
-            0,
-        ),
+        stats.get("health", 0),
     )
 
     social = stats.get(
         "social",
-        stats.get(
-            "social_score",
-            0,
-        ),
+        stats.get("reputation", 0),
     )
 
     finance = stats.get(
         "finance",
-        stats.get(
-            "financial_score",
-            0,
-        ),
+        stats.get("wealth", 0),
     )
 
     education = stats.get(
         "education",
-        stats.get(
-            "education_score",
-            0,
-        ),
+        stats.get("education_score", 0),
     )
 
     career = stats.get(
         "career",
-        stats.get(
-            "career_score",
-            0,
-        ),
+        stats.get("career_score", 0),
     )
 
+    # Le système de base ne possède pas encore tous les sous-scores.
+    # On calcule donc un score global cohérent avec les statistiques
+    # réellement disponibles.
     lifestyle = stats.get(
         "lifestyle",
-        stats.get(
-            "lifestyle_score",
-            stats.get(
-                "overall",
-                stats.get(
-                    "overall_score",
-                    0,
-                ),
-            ),
-        ),
+        stats.get("overall", 0),
     )
+
+    if not lifestyle:
+        lifestyle = round(
+            (
+                clamp(stats.get("health"))
+                + clamp(stats.get("joy"))
+                + clamp(stats.get("reputation"))
+                + ((clamp(stats.get("karma"), -100, 100) + 100) / 2)
+            ) / 4
+        )
 
     lines.extend(
         [
@@ -285,34 +272,56 @@ def lifestyle_keyboard() -> InlineKeyboardMarkup:
 # ============================================================
 # RÉCUPÉRATION DES STATISTIQUES
 # ============================================================
+async def get_life_character_by_id(
+    character_id: int,
+) -> dict[str, Any] | None:
+    """Récupère le personnage à partir de son identifiant interne."""
+    from life_world.database import AsyncSessionLocal
+    from sqlalchemy import text
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            text(
+                """
+                SELECT id, telegram_id, username
+                FROM life_characters
+                WHERE id = :id
+                LIMIT 1
+                """
+            ),
+            {"id": int(character_id)},
+        )
+        row = result.mappings().first()
+        return dict(row) if row else None
+
+
 
 async def load_stats(
     character_id: int,
 ) -> dict[str, Any] | None:
 
-    result = await get_lifestyle_stats(
+    # lifestyle_stats_system.py utilise le username comme clé.
+    # Le handler recevait auparavant character_id, ce qui empêchait
+    # de retrouver les statistiques du joueur.
+    actor = None
+
+    result = await get_life_character_by_id(
         character_id
     )
 
     if result is None:
         return None
 
-    if isinstance(
-        result,
-        dict,
-    ):
+    username = (
+        str(result.get("username") or "").strip().lstrip("@").lower()
+    )
 
-        if "stats" in result and isinstance(
-            result["stats"],
-            dict,
-        ):
-            return dict(
-                result["stats"]
-            )
+    if not username:
+        username = f"telegram_{result.get('telegram_id', character_id)}"
 
-        return dict(result)
+    stats = ensure_player_stats(username)
 
-    return None
+    return dict(stats) if stats else None
 
 
 # ============================================================
