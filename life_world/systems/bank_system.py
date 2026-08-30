@@ -458,6 +458,56 @@ async def get_character_accounts(
 
 
 # ============================================================
+# RECHERCHE PAR NUMÉRO DE COMPTE
+# ============================================================
+
+async def get_bank_account_by_number(
+    account_number: str,
+) -> dict[str, Any] | None:
+    """
+    Recherche un compte bancaire à partir de son numéro.
+    """
+
+    account_number = str(
+        account_number or ""
+    ).strip()
+
+    if not account_number:
+        return None
+
+    async with AsyncSessionLocal() as session:
+
+        result = await session.execute(
+            text(
+                """
+                SELECT
+                    a.*,
+                    b.name AS bank_name,
+                    b.bank_type,
+                    b.interest_rate,
+                    b.account_fee,
+                    b.transfer_fee,
+                    b.minimum_balance,
+                    b.maximum_balance,
+                    b.prestige
+                FROM life_bank_accounts a
+                INNER JOIN life_banks b
+                    ON b.id = a.bank_id
+                WHERE a.account_number = :account_number
+                LIMIT 1
+                """
+            ),
+            {
+                "account_number": account_number,
+            },
+        )
+
+        row = result.mappings().first()
+
+        return dict(row) if row else None
+
+
+# ============================================================
 # OUVERTURE DE COMPTE
 # ============================================================
 
@@ -1975,6 +2025,327 @@ async def get_banking_summary(
     }
 
 
+
+# ============================================================
+# COMPTE(S) DU PERSONNAGE — ALIAS HANDLER
+# ============================================================
+
+async def get_character_bank_accounts(
+    character_id: int,
+) -> list[dict[str, Any]]:
+    """
+    Retourne tous les comptes bancaires actifs du personnage.
+
+    Nom utilisé par life_world/handlers/bank.py.
+    """
+
+    return await get_character_accounts(
+        character_id
+    )
+
+
+async def transfer_bank_money(
+    character_id: int,
+    source_account_id: int,
+    destination_account_number: str,
+    amount: int,
+) -> dict[str, Any]:
+    """
+    Effectue un virement depuis un compte précis vers un numéro
+    de compte précis.
+
+    Le système principal transfer() reste disponible pour les
+    virements personnage-à-personnage.
+    """
+
+    try:
+        amount = validate_amount(
+            amount
+        )
+    except ValueError as exc:
+
+        return {
+            "success": False,
+            "message": f"❌ {exc}",
+        }
+
+    destination = await get_bank_account_by_number(
+        destination_account_number
+    )
+
+    if destination is None:
+
+        return {
+            "success": False,
+            "message": "❌ Compte destinataire introuvable.",
+        }
+
+    async with AsyncSessionLocal() as session:
+
+        source_result = await session.execute(
+            text(
+                """
+                SELECT
+                    a.*,
+                    b.name AS bank_name,
+                    b.transfer_fee
+                FROM life_bank_accounts a
+                INNER JOIN life_banks b
+                    ON b.id = a.bank_id
+                WHERE a.id = :account_id
+                  AND a.character_id = :character_id
+                  AND a.status = 'active'
+                FOR UPDATE
+                """
+            ),
+            {
+                "account_id": int(source_account_id),
+                "character_id": int(character_id),
+            },
+        )
+
+        source = source_result.mappings().first()
+
+        if source is None:
+
+            return {
+                "success": False,
+                "message": "❌ Compte source introuvable.",
+            }
+
+        if int(source["id"]) == int(destination["id"]):
+
+            return {
+                "success": False,
+                "message": "❌ Impossible de transférer vers le même compte.",
+            }
+
+        destination_result = await session.execute(
+            text(
+                """
+                SELECT
+                    a.*,
+                    b.name AS bank_name
+                FROM life_bank_accounts a
+                INNER JOIN life_banks b
+                    ON b.id = a.bank_id
+                WHERE a.id = :account_id
+                  AND a.status = 'active'
+                FOR UPDATE
+                """
+            ),
+            {
+                "account_id": int(destination["id"]),
+            },
+        )
+
+        destination_row = destination_result.mappings().first()
+
+        if destination_row is None:
+
+            return {
+                "success": False,
+                "message": "❌ Compte destinataire fermé ou introuvable.",
+            }
+
+        fee = int(
+            source["transfer_fee"] or 0
+        )
+
+        source_balance = int(
+            source["balance"] or 0
+        )
+
+        total_debit = amount + fee
+
+        if source_balance < total_debit:
+
+            return {
+                "success": False,
+                "message": (
+                    "❌ Solde bancaire insuffisant.\n"
+                    f"💰 Disponible : "
+                    f"{format_money(source_balance)} FCFA\n"
+                    f"💸 Total nécessaire : "
+                    f"{format_money(total_debit)} FCFA"
+                ),
+            }
+
+        destination_balance = int(
+            destination_row["balance"] or 0
+        )
+
+        new_source_balance = (
+            source_balance - total_debit
+        )
+
+        new_destination_balance = (
+            destination_balance + amount
+        )
+
+        await session.execute(
+            text(
+                """
+                UPDATE life_bank_accounts
+                SET balance = :balance
+                WHERE id = :account_id
+                """
+            ),
+            {
+                "balance": new_source_balance,
+                "account_id": int(source["id"]),
+            },
+        )
+
+        await session.execute(
+            text(
+                """
+                UPDATE life_bank_accounts
+                SET balance = :balance
+                WHERE id = :account_id
+                """
+            ),
+            {
+                "balance": new_destination_balance,
+                "account_id": int(destination_row["id"]),
+            },
+        )
+
+        await session.execute(
+            text(
+                """
+                INSERT INTO life_bank_transactions (
+                    account_id,
+                    transaction_type,
+                    amount,
+                    balance_after,
+                    description
+                )
+                VALUES (
+                    :account_id,
+                    'transfer_out',
+                    :amount,
+                    :balance_after,
+                    :description
+                )
+                """
+            ),
+            {
+                "account_id": int(source["id"]),
+                "amount": -amount,
+                "balance_after": new_source_balance,
+                "description": (
+                    f"Virement vers compte "
+                    f"{destination_row['account_number']}"
+                ),
+            },
+        )
+
+        if fee > 0:
+
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO life_bank_transactions (
+                        account_id,
+                        transaction_type,
+                        amount,
+                        balance_after,
+                        description
+                    )
+                    VALUES (
+                        :account_id,
+                        'transfer_fee',
+                        :amount,
+                        :balance_after,
+                        :description
+                    )
+                    """
+                ),
+                {
+                    "account_id": int(source["id"]),
+                    "amount": -fee,
+                    "balance_after": new_source_balance,
+                    "description": "Frais de virement",
+                },
+            )
+
+        await session.execute(
+            text(
+                """
+                INSERT INTO life_bank_transactions (
+                    account_id,
+                    transaction_type,
+                    amount,
+                    balance_after,
+                    description
+                )
+                VALUES (
+                    :account_id,
+                    'transfer_in',
+                    :amount,
+                    :balance_after,
+                    :description
+                )
+                """
+            ),
+            {
+                "account_id": int(destination_row["id"]),
+                "amount": amount,
+                "balance_after": new_destination_balance,
+                "description": (
+                    f"Virement depuis compte "
+                    f"{source['account_number']}"
+                ),
+            },
+        )
+
+        await session.commit()
+
+    return {
+        "success": True,
+        "amount": amount,
+        "fee": fee,
+        "source_balance": new_source_balance,
+        "destination_balance": new_destination_balance,
+        "message": (
+            "✅ **VIREMENT EFFECTUÉ**\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"💰 Montant : "
+            f"{format_money(amount)} FCFA\n"
+            f"🏦 Frais : "
+            f"{format_money(fee)} FCFA\n"
+            f"💳 Nouveau solde : "
+            f"{format_money(new_source_balance)} FCFA"
+        ),
+    }
+
+
+# ============================================================
+# COMPATIBILITÉ AVEC BANK HANDLER
+# ============================================================
+#
+# Le handler bancaire utilise les noms historiques ci-dessous.
+# Le système conserve ses noms principaux (open_account, deposit,
+# withdraw, transfer, etc.) et expose ces alias afin d'éviter de
+# casser les imports existants.
+# ============================================================
+
+open_bank_account = open_account
+deposit_to_bank = deposit
+withdraw_from_bank = withdraw
+transfer_between_accounts = transfer
+
+get_bank_account = get_account
+get_my_bank_account = get_character_account
+get_my_bank_accounts = get_character_accounts
+
+get_transactions = get_bank_transactions
+close_bank_account = close_account
+
+apply_interest = apply_account_interest
+
+
 # ============================================================
 # EXPORTS
 # ============================================================
@@ -2005,4 +2376,19 @@ __all__ = [
     "format_accounts",
     "format_transactions",
     "get_banking_summary",
+    "get_bank_account_by_number",
+    "get_character_bank_accounts",
+    "transfer_bank_money",
+
+    # Compatibilité handler
+    "open_bank_account",
+    "deposit_to_bank",
+    "withdraw_from_bank",
+    "transfer_between_accounts",
+    "get_bank_account",
+    "get_my_bank_account",
+    "get_my_bank_accounts",
+    "get_transactions",
+    "close_bank_account",
+    "apply_interest",
 ]

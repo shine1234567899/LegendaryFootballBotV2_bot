@@ -12,6 +12,120 @@ from telegram.ext import (
 from life_world.handlers.life import life_handler
 
 from life_world.handlers.lifestyle_stats import (
+    register_lifestyle_stats_handlers,
+)
+
+from life_world.handlers.business import (
+    register_business_handlers,
+)
+
+from life_world.handlers.jobs import (
+    register_jobs_handlers,
+)
+
+from life_world.handlers.company_jobs import (
+    register_company_jobs_handlers,
+)
+
+from life_world.handlers.company_contract import (
+    contracts_command,
+    contract_command,
+    contract_accept_command,
+    contract_tasks_command,
+    contract_complete_command,
+    contract_callback,
+)
+
+from life_world.handlers.company_market import (
+    register_company_market_handlers,
+)
+
+from life_world.handlers.company_market_management import (
+    register_company_market_management_handlers,
+)
+
+from life_world.handlers.bank import (
+    register_bank_handlers,
+)
+
+from life_world.handlers.credit_card import (
+    register_credit_card_handlers,
+)
+
+from life_world.handlers.loan import (
+    register_loan_handlers,
+)
+
+from life_world.handlers.education import (
+    school_command,
+    study_command,
+    domain_command,
+    domain_callback,
+)
+
+from life_world.handlers.domain_exams import (
+    register_domain_exam_handlers,
+)
+
+from life_world.handlers.school_enrollment import (
+    register_school_enrollment_handlers,
+)
+
+from life_world.handlers.school_profile import (
+    register_school_profile_handlers,
+)
+
+from life_world.handlers.family import (
+    register_family_handlers,
+)
+
+from life_world.handlers.adoption import (
+    register_adoption_handlers,
+)
+
+from life_world.handlers.marriage import (
+    register_marriage_handlers,
+)
+
+from life_world.handlers.friendship import (
+    register_friendship_handlers,
+)
+
+from life_world.handlers.health import (
+    register_health_handlers,
+)
+
+from life_world.handlers.housing import (
+    register_housing_handlers,
+)
+
+from life_world.handlers.inventory import (
+    register_inventory_handlers,
+)
+
+from life_world.handlers.life_events import (
+    register_life_events_handlers,
+)
+
+from life_world.handlers.expenses import (
+    register_expenses_handlers,
+)
+
+from life_world.handlers.skills import (
+    register_skills_handlers,
+)
+
+from life_world.handlers.wealth import (
+    register_wealth_handlers,
+)
+
+from life_world.handlers.economy import (
+    addlifecoins_handler,
+    paylife_handler,
+)
+
+
+from life_world.handlers.lifestyle_stats import (
     lifestyle_command,
     lifestyle_callback,
 )
@@ -472,27 +586,203 @@ async def post_init(
 
         BotCommand(
             "companyjobs",
-            "[MWL] View company job offers",
+            "[MWL] View company jobs",
         ),
 
         BotCommand(
             "createjob",
-            "[MWL] Create a company job offer",
+            "[MWL] Create a company job",
         ),
 
         BotCommand(
             "applyjoboffer",
-            "[MWL] Apply to a company job offer",
+            "[MWL] Apply to a company job",
         ),
 
         BotCommand(
             "contracts",
-            "[LFB] Player contracts",
+            "[MWL] Company contracts",
         ),
 
-        # ==================================================
-        # [LFB] LEGENDARY FOOTBALL BOT
-        # ==================================================
+        BotCommand(
+            "contract_accept",
+            "[MWL] Accept company contract",
+        ),
+
+        BotCommand(
+            "contract_tasks",
+            "[MWL] View contract tasks",
+        ),
+
+        BotCommand(
+            "contract_complete",
+            "[MWL] Complete contract task",
+        ),
+
+        BotCommand(
+            "market",
+            "[MWL] Company market",
+        ),
+
+        BotCommand(
+            "marketmanage",
+            "[MWL] Manage company market",
+        ),
+
+        BotCommand(
+            "bank",
+            "[MWL] Manage bank",
+        ),
+
+        BotCommand(
+            "card",
+            "[MWL] Manage bank card",
+        ),
+
+        BotCommand(
+            "loan",
+            "[MWL] Manage loans",
+        ),
+
+        BotCommand(
+            "school",
+            "[MWL] Open school",
+        ),
+
+        BotCommand(
+            "study",
+            "[MWL] Study",
+        ),
+
+        BotCommand(
+            "domain",
+            "[MWL] Choose study domain",
+        ),
+
+        BotCommand(
+            "exam",
+            "[MWL] Take exam",
+        ),
+
+        BotCommand(
+            "schoolenroll",
+            "[MWL] Enroll in school",
+        ),
+
+        BotCommand(
+            "changeschool",
+            "[MWL] Change school",
+        ),
+
+        BotCommand(
+            "schoolprofile",
+            "[MWL] School profile",
+        ),
+
+        BotCommand(
+            "orientation",
+            "[MWL] School orientation",
+        ),
+
+        BotCommand(
+            "family",
+            "[MWL] Family",
+        ),
+
+        BotCommand(
+            "adopt",
+            "[MWL] Adopt a child",
+        ),
+
+        BotCommand(
+            "adoption",
+            "[MWL] Adoption",
+        ),
+
+        BotCommand(
+            "children",
+            "[MWL] View children",
+        ),
+
+        BotCommand(
+            "marry",
+            "[MWL] Get married",
+        ),
+
+        BotCommand(
+            "marriage",
+            "[MWL] Marriage",
+        ),
+
+        BotCommand(
+            "divorce",
+            "[MWL] Divorce",
+        ),
+
+        BotCommand(
+            "addfriend",
+            "[MWL] Add a friend",
+        ),
+
+        BotCommand(
+            "friendrequests",
+            "[MWL] Friend requests",
+        ),
+
+        BotCommand(
+            "friends",
+            "[MWL] Friends",
+        ),
+
+        BotCommand(
+            "health",
+            "[MWL] Health",
+        ),
+
+        BotCommand(
+            "housing",
+            "[MWL] Housing",
+        ),
+
+        BotCommand(
+            "inventory",
+            "[MWL] Inventory",
+        ),
+
+        BotCommand(
+            "events",
+            "[MWL] Life events",
+        ),
+
+        BotCommand(
+            "expenses",
+            "[MWL] Expenses",
+        ),
+
+        BotCommand(
+            "expense",
+            "[MWL] Add an expense",
+        ),
+
+        BotCommand(
+            "skills",
+            "[MWL] Skills",
+        ),
+
+        BotCommand(
+            "wealth",
+            "[MWL] Wealth",
+        ),
+
+        BotCommand(
+            "addlifecoins",
+            "[MWL] Add Life Coins",
+        ),
+
+        BotCommand(
+            "paylife",
+            "[MWL] Pay Life Coins",
+        ),
 
         BotCommand(
             "start",
@@ -738,57 +1028,8 @@ async def post_init(
             "releaseplayer",
             "[LFB] Release player",
         ),
-
-        BotCommand(
-            "mytransfers",
-            "[LFB] View transfer listings",
-        ),
-
-        BotCommand(
-            "sponsor",
-            "[LFB] Manage sponsors",
-        ),
-
-        BotCommand(
-            "sponsors",
-            "[LFB] View sponsors",
-        ),
-
-        BotCommand(
-            "nomined",
-            "[LFB] Add Ballon d'Or nominee",
-        ),
-
-        BotCommand(
-            "ballondorrank",
-            "[LFB] Ballon d'Or ranking",
-        ),
-
-        BotCommand(
-            "ballondororder",
-            "[LFB] Set Ballon d'Or ranking",
-        ),
-
-        BotCommand(
-            "ballondorwinner",
-            "[LFB] Set Ballon d'Or winner",
-        ),
-
-        BotCommand(
-            "clearballondor",
-            "[LFB] Reset Ballon d'Or",
-        ),
-
-        BotCommand(
-            "users",
-            "[LFB] View bot users",
-        ),
-
-        BotCommand(
-            "ballondorhelp",
-            "[LFB] Ballon d'Or help",
-        ),
     ]
+
 
     try:
 
@@ -798,7 +1039,7 @@ async def post_init(
 
         print(
             "✅ Telegram command menu updated: "
-            f"{len(commands)} commands."
+            f"{len(commands)} commands (Telegram limit: 100 per scope)."
         )
 
     except Exception as error:
@@ -950,136 +1191,27 @@ def main():
     # ======================================================
     # [MWL] MANUWORLD
     #
-    # MWL commands are registered BEFORE the normal LFB
-    # command handlers.
+    # All MANUWORLD handlers are registered before the
+    # normal LFB handlers.
     # ======================================================
 
     application.add_handler(
         life_handler
     )
 
+    # Core systems with their own complete registration.
+    register_lifestyle_stats_handlers(application)
+    register_business_handlers(application)
+    register_jobs_handlers(application)
+    register_company_jobs_handlers(application)
+
+    # Company contracts: /contract belongs to LFB, so the
+    # MWL company-contract command uses /contract_mwl while
+    # the remaining MWL company-contract commands keep their
+    # original names.
     application.add_handler(
         CommandHandler(
-            "lifestyle",
-            lifestyle_command,
-        )
-    )
-
-    application.add_handler(
-        CallbackQueryHandler(
-            lifestyle_callback,
-            pattern=r"^lifestyle:",
-        )
-    )
-
-    application.add_handler(
-        CommandHandler(
-            "business",
-            business_command,
-        )
-    )
-
-    application.add_handler(
-        CommandHandler(
-            "businesses",
-            businesses_command,
-        )
-    )
-
-    application.add_handler(
-        CommandHandler(
-            "business_create",
-            business_create_command,
-        )
-    )
-
-    application.add_handler(
-        CallbackQueryHandler(
-            business_callback,
-            pattern=r"^business:",
-        )
-    )
-
-    application.add_handler(
-        CommandHandler(
-            "jobs",
-            jobs_command,
-        )
-    )
-
-    application.add_handler(
-        CommandHandler(
-            "job",
-            job_command,
-        )
-    )
-
-    application.add_handler(
-        CommandHandler(
-            "jobsearch",
-            jobsearch_command,
-        )
-    )
-
-    application.add_handler(
-        CommandHandler(
-            "applyjob",
-            applyjob_command,
-        )
-    )
-
-    application.add_handler(
-        CommandHandler(
-            "resign",
-            resign_command,
-        )
-    )
-
-    application.add_handler(
-        CallbackQueryHandler(
-            jobs_callback,
-            pattern=r"^jobs:",
-        )
-    )
-
-    application.add_handler(
-        CommandHandler(
-            "joboffers",
-            joboffers_command,
-        )
-    )
-
-    application.add_handler(
-        CommandHandler(
-            "companyjobs",
-            companyjobs_command,
-        )
-    )
-
-    application.add_handler(
-        CommandHandler(
-            "createjob",
-            createjob_command,
-        )
-    )
-
-    application.add_handler(
-        CommandHandler(
-            "applyjoboffer",
-            applyjoboffer_command,
-        )
-    )
-
-    application.add_handler(
-        CallbackQueryHandler(
-            companyjobs_callback,
-            pattern=r"^companyjobs:",
-        )
-    )
-
-    application.add_handler(
-        CommandHandler(
-            "contracts_mwl",
+            "contracts",
             contracts_command,
         )
     )
@@ -1117,6 +1249,68 @@ def main():
             contract_callback,
             pattern=r"^contract:",
         )
+    )
+
+    register_company_market_handlers(application)
+    register_company_market_management_handlers(application)
+
+    register_bank_handlers(application)
+    register_credit_card_handlers(application)
+    register_loan_handlers(application)
+
+    # Education: /exam is handled by the complete interactive
+    # domain-exam engine below, not the preparation-only command
+    # from education.py.
+    application.add_handler(
+        CommandHandler(
+            "school",
+            school_command,
+        )
+    )
+
+    application.add_handler(
+        CommandHandler(
+            "study",
+            study_command,
+        )
+    )
+
+    application.add_handler(
+        CommandHandler(
+            "domain",
+            domain_command,
+        )
+    )
+
+    application.add_handler(
+        CallbackQueryHandler(
+            domain_callback,
+            pattern=r"^edu_domain:",
+        )
+    )
+
+    register_domain_exam_handlers(application)
+    register_school_enrollment_handlers(application)
+    register_school_profile_handlers(application)
+
+    register_family_handlers(application)
+    register_adoption_handlers(application)
+    register_marriage_handlers(application)
+    register_friendship_handlers(application)
+    register_health_handlers(application)
+    register_housing_handlers(application)
+    register_inventory_handlers(application)
+    register_life_events_handlers(application)
+    register_expenses_handlers(application)
+    register_skills_handlers(application)
+    register_wealth_handlers(application)
+
+    application.add_handler(
+        addlifecoins_handler
+    )
+
+    application.add_handler(
+        paylife_handler
     )
 
     # ======================================================
