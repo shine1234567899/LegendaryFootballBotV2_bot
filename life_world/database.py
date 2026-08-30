@@ -856,41 +856,14 @@ async def ensure_life_tables() -> None:
             """,
         ]
 
-        for statement in statements:
-            await session.execute(text(statement))
-
-        await session.execute(text("""
-            CREATE INDEX IF NOT EXISTS idx_life_friend_receiver
-            ON life_friend_requests (receiver_character_id, status)
-        """))
-        await session.execute(text("""
-            CREATE INDEX IF NOT EXISTS idx_life_company_members_active
-            ON life_company_members (company_id, status)
-        """))
-        await session.execute(text("""
-            CREATE INDEX IF NOT EXISTS idx_life_company_contracts_active
-            ON life_company_contracts (company_id, status)
-        """))
-        await session.execute(text("""
-            CREATE INDEX IF NOT EXISTS idx_life_bank_accounts_character
-            ON life_bank_accounts (character_id, status)
-        """))
-        await session.execute(text("""
-            CREATE INDEX IF NOT EXISTS idx_life_inventory_character
-            ON life_inventory (character_id)
-        """))
-
         # ----------------------------------------------------------
-        await session.execute(text("""
-            CREATE INDEX IF NOT EXISTS idx_life_credit_cards_character
-            ON life_credit_cards (character_id, status)
-        """))
-        await session.execute(text("""
-            CREATE INDEX IF NOT EXISTS idx_life_credit_card_transactions
-            ON life_credit_card_transactions (card_id, created_at DESC)
-        """))
-
-        # SAFE MIGRATION OF THE OLD life_characters TABLE
+        # SAFE MIGRATION OF AN EXISTING life_characters TABLE
+        #
+        # IMPORTANT:
+        # Northflank/PostgreSQL may already contain an older
+        # life_characters table. CREATE TABLE IF NOT EXISTS does NOT
+        # update that existing table, so the required columns must be
+        # added BEFORE creating indexes such as LOWER(username).
         # ----------------------------------------------------------
         result = await session.execute(
             text(
@@ -929,8 +902,6 @@ async def ensure_life_tables() -> None:
             if column not in existing:
                 await session.execute(text(statement))
 
-        # Existing characters remain at their current game age if they
-        # already have one; old records get the new starting age.
         await session.execute(
             text(
                 """
@@ -941,7 +912,56 @@ async def ensure_life_tables() -> None:
             )
         )
 
-        await session.commit()
+        await session.execute(
+            text(
+                """
+                UPDATE life_characters
+                SET updated_at = NOW()
+                WHERE updated_at IS NULL
+                """
+            )
+        )
+
+        # Make the new username column usable by the rest of MANUWORLD.
+        # Existing records are preserved; NULL usernames remain NULL until
+        # the Telegram user has a username.
+        await session.flush()
+
+        for statement in statements:
+            await session.execute(text(statement))
+
+        await session.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_life_friend_receiver
+            ON life_friend_requests (receiver_character_id, status)
+        """))
+        await session.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_life_company_members_active
+            ON life_company_members (company_id, status)
+        """))
+        await session.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_life_company_contracts_active
+            ON life_company_contracts (company_id, status)
+        """))
+        await session.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_life_bank_accounts_character
+            ON life_bank_accounts (character_id, status)
+        """))
+        await session.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_life_inventory_character
+            ON life_inventory (character_id)
+        """))
+
+        # ----------------------------------------------------------
+        await session.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_life_credit_cards_character
+            ON life_credit_cards (character_id, status)
+        """))
+        await session.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_life_credit_card_transactions
+            ON life_credit_card_transactions (card_id, created_at DESC)
+        """))
+
+
 
 
 async def get_life_character(telegram_id: int):
