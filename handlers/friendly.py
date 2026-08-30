@@ -461,6 +461,32 @@ async def _start_accepted_friendly(
 
 
 # ==========================================================
+# SYNC TELEGRAM USERNAME
+# ==========================================================
+
+async def _sync_telegram_user(telegram_user):
+    """Synchronize the current Telegram username with the User row."""
+    if telegram_user is None:
+        return
+
+    async with AsyncSessionLocal() as session:
+        user = await session.get(User, int(telegram_user.id))
+        if user is None:
+            return
+
+        changed = False
+        if user.username != telegram_user.username:
+            user.username = telegram_user.username
+            changed = True
+        if user.first_name != telegram_user.first_name:
+            user.first_name = telegram_user.first_name
+            changed = True
+
+        if changed:
+            await session.commit()
+
+
+# ==========================================================
 # GET USER
 # ==========================================================
 
@@ -2624,6 +2650,7 @@ async def friendly(
         return
 
     challenger = update.effective_user
+    await _sync_telegram_user(challenger)
     opponent = context.args[0].strip()
 
     if not opponent.startswith("@") or len(opponent) <= 1:
@@ -2761,6 +2788,8 @@ async def friendly_accept_callback(
         await _safe_query_answer(query, "❌ This challenge is not for you.", True)
         return
 
+    await _sync_telegram_user(query.from_user)
+
     # Paid friendly: the challenger and opponent both pay the stake atomically.
     stake = int(pending.get("stake") or 0)
     if stake > 0:
@@ -2878,6 +2907,7 @@ async def friendlypay(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     challenger = update.effective_user
+    await _sync_telegram_user(challenger)
     invited_user = await get_user_by_username(opponent)
     if invited_user is None:
         await update.message.reply_text("❌ This username is not registered.")

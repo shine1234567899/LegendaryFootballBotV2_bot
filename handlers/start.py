@@ -60,16 +60,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = await session.get(User, user_id)
 
         if user is None:
-            user = User(
-                id=user_id,
-                username=telegram_user.username,
-                first_name=telegram_user.first_name,
-                coins=0,
-                gems=0,
-            )
+         user = User(
+        id=user_id,
+        username=telegram_user.username,
+        first_name=telegram_user.first_name,
+        coins=0,
+        gems=0,
+    )
 
-            session.add(user)
-            await session.commit()
+         session.add(user)
+
+        else:
+    # Telegram peut créer/modifier le username
+    # après la création du compte dans le bot.
+    # On synchronise donc toujours les informations
+    # actuelles du compte Telegram.
+         user.username = telegram_user.username
+         user.first_name = telegram_user.first_name
+
+        await session.commit()
 
         # Récupérer le club
         result = await session.execute(
