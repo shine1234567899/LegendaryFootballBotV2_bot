@@ -962,6 +962,8 @@ async def ensure_life_tables() -> None:
         """))
 
 
+        await session.commit()
+
 
 
 async def get_life_character(telegram_id: int):
