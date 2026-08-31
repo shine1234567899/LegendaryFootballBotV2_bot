@@ -237,6 +237,7 @@ async def create_company(
                     name,
                     company_type,
                     description,
+                    capital,
                     treasury,
                     status,
                     reputation,
@@ -247,6 +248,7 @@ async def create_company(
                     :name,
                     :company_type,
                     :description,
+                    :capital,
                     :treasury,
                     :status,
                     :reputation,
@@ -260,6 +262,7 @@ async def create_company(
                 "name": name,
                 "company_type": company_type,
                 "description": description,
+                "capital": initial_capital,
                 "treasury": initial_capital,
                 "status": COMPANY_STATUS_ACTIVE,
                 "reputation": DEFAULT_REPUTATION,
@@ -323,12 +326,14 @@ async def create_company(
                 INSERT INTO life_company_members (
                     company_id,
                     character_id,
+                    position,
                     grade,
                     status
                 )
                 VALUES (
                     :company_id,
                     :character_id,
+                    'Owner',
                     'owner',
                     'active'
                 )
@@ -977,6 +982,7 @@ async def hire_character(
                 INSERT INTO life_company_members (
                     company_id,
                     character_id,
+                    position,
                     grade,
                     salary,
                     status
@@ -984,6 +990,7 @@ async def hire_character(
                 VALUES (
                     :company_id,
                     :character_id,
+                    :grade,
                     :grade,
                     :salary,
                     'active'

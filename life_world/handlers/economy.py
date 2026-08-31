@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from config import OWNER_IDS
 from database.database import AsyncSessionLocal
+from life_world.utils.targeting import resolve_target
 
 
 # ==========================================================
@@ -125,72 +126,53 @@ async def paylife(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
-    """
-    Player-to-player Life Coins transfer:
+    """Transfer Life Coins using a reply or @username lookup.
 
-        /paylife @username <amount>
-
-    The receiver is resolved by the MANUWORLD username, never by
-    Telegram numeric ID.
+    The recipient is always identified internally by Telegram ID.
     """
     message = update.effective_message
     user = update.effective_user
-
     if message is None or user is None:
         return
 
-    if len(context.args) != 2:
+    if len(context.args) == 1:
+        amount_text = context.args[0]
+    elif len(context.args) == 2:
+        amount_text = context.args[1]
+    else:
         await message.reply_text(
             "💸 𝐏𝐀𝐘 𝐋𝐈𝐅𝐄\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
-            "Utilisation :\n"
-            "/paylife @username <montant>\n\n"
-            "Exemple :\n"
-            "/paylife @shine 500"
+            "• Réponds au message d'un joueur : `/paylife 500`\n"
+            "• Ou utilise : `/paylife @username 500`"
         )
         return
-
-    target_username = context.args[0].strip().lstrip("@").lower()
 
     try:
-        amount = int(
-            context.args[1].replace(" ", "").replace(",", "")
-        )
+        amount = int(amount_text.replace(" ", "").replace(",", ""))
     except ValueError:
-        await message.reply_text(
-            "❌ Le montant doit être numérique."
-        )
-        return
-
-    if not target_username:
-        await message.reply_text(
-            "❌ Username invalide."
-        )
+        await message.reply_text("❌ Le montant doit être numérique.")
         return
 
     if amount <= 0:
+        await message.reply_text("❌ Le montant doit être supérieur à 0.")
+        return
+
+    target_result = await resolve_target(update, allow_self=False)
+    if target_result.character is None or target_result.error:
         await message.reply_text(
-            "❌ Le montant doit être supérieur à 0."
+            target_result.error or "❌ Joueur introuvable."
         )
         return
 
+    receiver_id = int(
+        target_result.telegram_id
+        or target_result.character["telegram_id"]
+    )
+    receiver = dict(target_result.character)
+
     async with AsyncSessionLocal() as session:
         sender = await _get_character(session, user.id)
-
-        receiver_result = await session.execute(
-            text(
-                """
-                SELECT id, telegram_id, first_name, username, balance
-                FROM life_characters
-                WHERE LOWER(REPLACE(COALESCE(username, ''), '@', ''))
-                    = :username
-                LIMIT 1
-                """
-            ),
-            {"username": target_username},
-        )
-        receiver = receiver_result.mappings().first()
-
         if sender is None:
             await message.reply_text(
                 "❌ Tu n'as pas encore de personnage MANUWORLD.\n"
@@ -198,76 +180,77 @@ async def paylife(
             )
             return
 
-        if receiver is None:
-            await message.reply_text(
-                f"❌ Le joueur @{target_username} n'a pas été trouvé."
-            )
-            return
-
-        if int(receiver["telegram_id"]) == int(user.id):
-            await message.reply_text(
-                "❌ Tu ne peux pas te payer toi-même."
-            )
-            return
-
-        result = await session.execute(
-            text(
-                """
-                UPDATE life_characters
-                SET balance = balance - :amount
-                WHERE telegram_id = :sender_id
-                  AND balance >= :amount
-                """
-            ),
-            {
-                "amount": amount,
-                "sender_id": user.id,
-            },
+        sender_result = await session.execute(
+            text("""
+                SELECT id, telegram_id, first_name, username, balance
+                FROM life_characters
+                WHERE telegram_id=:sender_id
+                FOR UPDATE
+            """),
+            {"sender_id": int(user.id)},
         )
+        sender_row = sender_result.mappings().first()
 
-        if result.rowcount != 1:
+        receiver_result = await session.execute(
+            text("""
+                SELECT id, telegram_id, first_name, username, balance
+                FROM life_characters
+                WHERE telegram_id=:receiver_id
+                FOR UPDATE
+            """),
+            {"receiver_id": receiver_id},
+        )
+        receiver_row = receiver_result.mappings().first()
+
+        if sender_row is None or receiver_row is None:
             await session.rollback()
-            await message.reply_text(
-                "❌ Solde insuffisant."
-            )
+            await message.reply_text("❌ Joueur introuvable.")
+            return
+
+        if int(sender_row["balance"] or 0) < amount:
+            await session.rollback()
+            await message.reply_text("❌ Solde insuffisant.")
             return
 
         await session.execute(
-            text(
-                """
+            text("""
                 UPDATE life_characters
-                SET balance = balance + :amount
-                WHERE id = :receiver_id
-                """
-            ),
-            {
-                "amount": amount,
-                "receiver_id": int(receiver["id"]),
-            },
+                SET balance=balance-:amount, updated_at=NOW()
+                WHERE telegram_id=:sender_id
+            """),
+            {"amount": amount, "sender_id": int(user.id)},
         )
-
+        await session.execute(
+            text("""
+                UPDATE life_characters
+                SET balance=balance+:amount, updated_at=NOW()
+                WHERE telegram_id=:receiver_id
+            """),
+            {"amount": amount, "receiver_id": receiver_id},
+        )
         await session.commit()
 
         balance_result = await session.execute(
-            text(
-                """
-                SELECT balance
-                FROM life_characters
-                WHERE telegram_id = :telegram_id
-                """
-            ),
-            {"telegram_id": user.id},
+            text("""
+                SELECT balance FROM life_characters
+                WHERE telegram_id=:telegram_id
+            """),
+            {"telegram_id": int(user.id)},
         )
-        sender_balance = balance_result.scalar_one()
+        sender_balance = int(balance_result.scalar_one())
 
-    receiver_name = receiver["first_name"] or f"@{target_username}"
+    target_username = str(
+        receiver.get("username") or ""
+    ).strip().lstrip("@")
+    receiver_name = receiver.get("first_name") or target_username or "Joueur"
 
     await message.reply_text(
         "💸 𝐏𝐀𝐘𝐌𝐄𝐍𝐓 𝐒𝐄𝐍𝐓\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         f"👤 From : {sender['first_name']}\n"
-        f"➡️ To : {receiver_name} (@{target_username})\n"
-        f"💰 Amount : {amount:,} LC\n"
+        f"➡️ To : {receiver_name}"
+        + (f" (@{target_username})" if target_username else "")
+        + f"\n💰 Amount : {amount:,} LC\n"
         f"💵 Remaining balance : {sender_balance:,} LC"
     )
 

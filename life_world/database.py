@@ -1187,6 +1187,29 @@ async def ensure_life_world_migrations() -> None:
     async with AsyncSessionLocal() as session:
 
         # ----------------------------------------------------------
+        # Compatibility migration for the company engine.
+        # The original table predates the richer business handler.
+        # Add only missing columns; never drop or rewrite existing data.
+        # ----------------------------------------------------------
+        company_migrations = (
+            "ALTER TABLE life_companies ADD COLUMN IF NOT EXISTS company_type VARCHAR(50) NOT NULL DEFAULT 'general'",
+            "ALTER TABLE life_companies ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE life_companies ADD COLUMN IF NOT EXISTS status VARCHAR(30) NOT NULL DEFAULT 'active'",
+            "ALTER TABLE life_company_members ADD COLUMN IF NOT EXISTS grade VARCHAR(40) NOT NULL DEFAULT 'employee'",
+        )
+        for statement in company_migrations:
+            await session.execute(text(statement))
+
+        await session.execute(text("""
+            UPDATE life_companies
+            SET status = CASE
+                WHEN active = TRUE THEN 'active'
+                ELSE 'closed'
+            END
+            WHERE status IS NULL OR status = ''
+        """))
+
+        # ----------------------------------------------------------
         # Columns used by the progressive Cameroon-style education
         # system. We keep the existing education_level column as the
         # canonical current level.

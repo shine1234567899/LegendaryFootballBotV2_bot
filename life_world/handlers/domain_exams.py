@@ -962,16 +962,18 @@ async def finish_exam(
                 text(
                     """
                     UPDATE life_characters
-                    SET education_level=:education_level,
-                        school_class=:school_class,
-                        current_diploma=:current_diploma,
-                        diploma_level=:current_diploma,
+                    SET education_level=CAST(:education_level AS VARCHAR(80)),
+                        school_class=CAST(:school_class AS VARCHAR(80)),
+                        current_diploma=CAST(:current_diploma AS VARCHAR(100)),
+                        diploma_level=CAST(:current_diploma AS VARCHAR(100)),
                         school_xp=0,
                         school_xp_required=CASE
-                            WHEN :education_level ILIKE '%collège%' THEN 150
-                            WHEN :education_level ILIKE '%lycée%' AND :school_class='Première' THEN 200
-                            WHEN :education_level ILIKE '%lycée%' AND :school_class='Terminale' THEN 250
-                            WHEN :education_level ILIKE '%univers%' THEN 500
+                            WHEN CAST(:education_level AS TEXT) ILIKE '%collège%' THEN 150
+                            WHEN CAST(:education_level AS TEXT) ILIKE '%lycée%'
+                                 AND CAST(:school_class AS TEXT)='Première' THEN 200
+                            WHEN CAST(:education_level AS TEXT) ILIKE '%lycée%'
+                                 AND CAST(:school_class AS TEXT)='Terminale' THEN 250
+                            WHEN CAST(:education_level AS TEXT) ILIKE '%univers%' THEN 500
                             ELSE 100
                         END,
                         updated_at=NOW()
@@ -1014,6 +1016,33 @@ async def finish_exam(
                 ),
             },
         )
+
+        if passed:
+            # Synchronise l'historique scolaire avec les champs
+            # canoniques de life_characters. /school ne restera plus
+            # bloqué sur l'ancienne classe.
+            await db.execute(
+                text("""
+                    UPDATE life_school_years
+                    SET result='passed'
+                    WHERE character_id=:character_id
+                      AND result='in_progress'
+                """),
+                {"character_id": character_id},
+            )
+            await db.execute(
+                text("""
+                    INSERT INTO life_school_years (
+                        character_id, class_name, academic_year, average, result
+                    )
+                    VALUES (
+                        :character_id, CAST(:school_class AS VARCHAR(80)),
+                        EXTRACT(YEAR FROM CURRENT_DATE)::INTEGER,
+                        0, 'in_progress'
+                    )
+                """),
+                {"character_id": character_id, "school_class": next_class},
+            )
 
         await db.commit()
 

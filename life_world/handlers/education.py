@@ -134,6 +134,18 @@ async def school_command(update:Update, context:ContextTypes.DEFAULT_TYPE):
             await ensure_active_school_year(session,character["id"],level)
             await session.commit()
             year=await get_active_school_year(session,character["id"])
+        elif str(year["class_name"] or "") != str(level["class_name"] or ""):
+            # The character fields are canonical. If an older school-year
+            # row still points to CM2 (or another previous class), close it
+            # and create the current class instead of displaying stale data.
+            await session.execute(text("""
+                UPDATE life_school_years
+                SET result='passed'
+                WHERE character_id=:character_id AND result='in_progress'
+            """),{"character_id":character["id"]})
+            await ensure_active_school_year(session,character["id"],level)
+            await session.commit()
+            year=await get_active_school_year(session,character["id"])
     xp=int(character.get("school_xp") or 0)
     required=int(character.get("school_xp_required") or 100)
     diploma=level["diploma"] or character.get("current_diploma") or "Aucun"

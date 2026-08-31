@@ -131,6 +131,40 @@ async def resolve_target(
             error="❌ Impossible de déterminer l'utilisateur."
         )
 
+    message = update.effective_message
+
+    # --------------------------------------------------------
+    # RÉPONSE À UN MESSAGE = SOURCE PRIORITAIRE
+    # On utilise directement l'ID Telegram de l'auteur de la
+    # réponse. Le username n'est jamais utilisé comme identifiant.
+    # --------------------------------------------------------
+    if message and message.reply_to_message and message.reply_to_message.from_user:
+        replied_user = message.reply_to_message.from_user
+        character = await get_life_character(replied_user.id)
+
+        if character is None:
+            return TargetResult(
+                telegram_id=replied_user.id,
+                username=normalize_username(replied_user.username),
+                error="❌ Aucun personnage MANUWORLD trouvé pour ce joueur.",
+            )
+
+        target_id = int(character.get("telegram_id") or replied_user.id)
+
+        if not allow_self and target_id == int(actor.id):
+            return TargetResult(
+                character=character,
+                telegram_id=target_id,
+                username=normalize_username(replied_user.username),
+                error="❌ Tu ne peux pas utiliser cette action sur toi-même.",
+            )
+
+        return TargetResult(
+            character=character,
+            telegram_id=target_id,
+            username=normalize_username(replied_user.username),
+        )
+
     username = get_target_username(update)
 
     # --------------------------------------------------------

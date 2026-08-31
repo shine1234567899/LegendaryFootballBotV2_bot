@@ -25,6 +25,11 @@ from telegram.ext import (
 )
 
 from life_world.database import get_life_character
+from life_world.systems.credit_card_system import (
+    create_credit_card,
+    get_character_credit_cards,
+)
+
 from life_world.systems.bank_system import (
     seed_default_banks,
     get_banks,
@@ -204,9 +209,66 @@ async def bank_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "💳 Ouvrir un compte",
                     callback_data=f"mwbank:open:{bank['id']}"
                 )],
+                *(
+                    [[InlineKeyboardButton(
+                        "💳 Demander la carte bancaire",
+                        callback_data=f"mwbank:card:{bank['id']}"
+                    )]]
+                    if bank.get("card_name")
+                    else []
+                ),
                 [InlineKeyboardButton("⬅️ Banques", callback_data="mwbank:list")],
             ]),
             parse_mode="Markdown",
+        )
+        return
+
+    if action == "card" and len(parts) >= 3:
+        bank = await get_bank(int(parts[2]))
+        if not bank:
+            await query.edit_message_text("❌ Banque introuvable.")
+            return
+
+        card_name = bank.get("card_name")
+        if not card_name:
+            await query.edit_message_text("❌ Cette banque ne propose pas de carte.")
+            return
+
+        cards = await get_character_credit_cards(int(character["id"]))
+        if any(int(c.get("bank_id") or 0) == int(bank["id"]) for c in cards):
+            await query.edit_message_text(
+                "💳 Tu possèdes déjà une carte de cette banque.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("💳 Mes cartes", callback_data="card_list")],
+                    [InlineKeyboardButton("🏦 Banques", callback_data="mwbank:list")],
+                ]),
+            )
+            return
+
+        # Credit limit scales with the bank's prestige and initial deposit.
+        initial = int(bank.get("initial_deposit") or 0)
+        prestige = int(bank.get("prestige") or 1)
+        credit_limit = max(100_000, min(10_000_000, max(initial // 2, prestige * 250_000)))
+
+        result = await create_credit_card(
+            character_id=int(character["id"]),
+            bank_id=int(bank["id"]),
+            card_name=str(card_name),
+            credit_limit=credit_limit,
+            card_type=str(bank.get("card_type") or "standard"),
+            interest_rate=2.5,
+            annual_fee=0,
+            reward_rate=min(5.0, prestige * 0.2),
+            credit_score=500 + min(300, prestige * 20),
+        )
+
+        await query.edit_message_text(
+            result.get("message", "❌ Impossible de créer la carte.")
+            + (f"\n💳 Limite : {credit_limit:,} FCFA" if result.get("success") else ""),
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("💳 Mes cartes", callback_data="card_list")],
+                [InlineKeyboardButton("🏦 Banques", callback_data="mwbank:list")],
+            ]),
         )
         return
 
