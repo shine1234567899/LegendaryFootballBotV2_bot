@@ -993,22 +993,25 @@ async def finish_exam(
                 """
                 INSERT INTO life_transactions (
                     character_id,
-                    type,
+                    transaction_type,
                     amount,
-                    currency,
-                    description
+                    balance_after,
+                    description,
+                    reference
                 )
                 VALUES (
                     :character_id,
                     'education_exam',
                     0,
-                    'coins',
-                    :description
+                    (SELECT balance FROM life_characters WHERE id=:character_id),
+                    :description,
+                    :reference
                 )
                 """
             ),
             {
                 "character_id": character_id,
+                "reference": f"exam:{exam_type}",
                 "description": (
                     f"Examen {config['name']} - "
                     f"{correct}/{total} - "

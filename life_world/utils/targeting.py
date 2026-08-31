@@ -1,314 +1,100 @@
 """
-MANUWORLD - targeting.py
+MANUWORLD V3 — TARGETING
 
-Système central de ciblage d'un joueur.
-
-Une commande peut cibler :
-    /commande @username
-    /commande username
-
-ou être utilisée en réponse au message du joueur :
-    /commande
-
-Ce fichier permet aux autres handlers de ne pas
-réécrire cette logique à chaque fois.
+Règle globale : une commande visant un autre joueur accepte uniquement :
+1) une réponse au message de ce joueur ;
+2) @username.
+Les IDs Telegram ne sont jamais demandés aux joueurs.
 """
-
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any
 
-from telegram import Update
-from telegram.ext import ContextTypes
+from life_world.database import get_life_character, get_life_character_by_username
 
-from life_world.database import (
-    get_life_character,
-    get_life_character_by_username,
-)
-
-
-# ============================================================
-# RESULTAT DU CIBLAGE
-# ============================================================
 
 @dataclass
 class TargetResult:
-    character: Optional[object] = None
-    telegram_id: Optional[int] = None
-    username: Optional[str] = None
-    error: Optional[str] = None
-
-    @property
-    def found(self) -> bool:
-        return self.character is not None
+    character: dict[str, Any] | None
+    telegram_id: int | None = None
+    error: str | None = None
+    source: str | None = None
 
 
-# ============================================================
-# UTILITAIRES
-# ============================================================
-
-def normalize_username(username: str | None) -> str:
-    """
-    Transforme :
-
-        @Shine
-        Shine
-        @shine
-
-    en :
-
-        shine
-    """
-    return (username or "").strip().lstrip("@").strip()
+def normalize_username(value: str | None) -> str:
+    return str(value or "").strip().lstrip("@").lower()
 
 
-# ============================================================
-# RECUPERER LA CIBLE
-# ============================================================
-
-def get_target_username(update: Update) -> str:
-    """
-    Cherche la cible dans cet ordre :
-
-    1. /commande @username
-    2. /commande username
-    3. réponse au message d'un joueur
-    """
-
-    message = update.effective_message
-
-    if message is None:
-        return ""
-
-    text = message.text or message.caption or ""
-    parts = text.split()
-
-    # --------------------------------------------------------
-    # /commande @username
-    # --------------------------------------------------------
-
-    if len(parts) >= 2:
-        candidate = normalize_username(parts[1])
-
-        if candidate:
-            return candidate
-
-    # --------------------------------------------------------
-    # /commande en réponse à un message
-    # --------------------------------------------------------
-
-    reply = message.reply_to_message
-
-    if reply and reply.from_user:
-
-        username = reply.from_user.username
-
-        if username:
-            return normalize_username(username)
-
-    return ""
+def get_target_username(update) -> str | None:
+    msg=update.effective_message
+    if not msg:return None
+    if msg.reply_to_message and msg.reply_to_message.from_user:
+        u=msg.reply_to_message.from_user
+        return u.username
+    entities=msg.entities or []
+    for entity in entities:
+        if entity.type=="mention":
+            try:
+                return msg.text[entity.offset:entity.offset+entity.length]
+            except Exception:
+                pass
+    if getattr(update,"effective_user",None):
+        # /command @username amount => second token is the target.
+        text=msg.text or ""
+        parts=text.split()
+        if len(parts)>=2 and parts[1].startswith("@"):
+            return parts[1]
+    return None
 
 
-# ============================================================
-# RESOLUTION DE LA CIBLE
-# ============================================================
+async def resolve_target(update, *, allow_self: bool=False) -> TargetResult:
+    msg=update.effective_message
+    actor_user=update.effective_user
+    if not msg or not actor_user:
+        return TargetResult(None,error="❌ Message invalide.")
 
-async def resolve_target(
-    update: Update,
-    *,
-    allow_self: bool = False,
-) -> TargetResult:
-    """
-    Recherche le personnage MANUWORLD correspondant
-    au joueur ciblé.
-    """
+    target_user=None
+    source=None
 
-    actor = update.effective_user
-
-    if actor is None:
+    if msg.reply_to_message and msg.reply_to_message.from_user:
+        target_user=msg.reply_to_message.from_user
+        source="reply"
+    else:
+        parts=(msg.text or "").split()
+        if len(parts)>=2 and parts[1].startswith("@"):
+            username=normalize_username(parts[1])
+            if username:
+                character=await get_life_character_by_username(username)
+                if character:
+                    tid=int(character["telegram_id"])
+                    if not allow_self and tid==int(actor_user.id):
+                        return TargetResult(None,error="❌ Tu ne peux pas te cibler toi-même.")
+                    return TargetResult(dict(character),tid,None,"username")
+                return TargetResult(None,error="❌ Aucun personnage avec ce @username.")
         return TargetResult(
-            error="❌ Impossible de déterminer l'utilisateur."
+            None,
+            error="❌ Cible manquante. Réponds au message du joueur ou utilise `@username`.",
         )
 
-    message = update.effective_message
-
-    # --------------------------------------------------------
-    # RÉPONSE À UN MESSAGE = SOURCE PRIORITAIRE
-    # On utilise directement l'ID Telegram de l'auteur de la
-    # réponse. Le username n'est jamais utilisé comme identifiant.
-    # --------------------------------------------------------
-    if message and message.reply_to_message and message.reply_to_message.from_user:
-        replied_user = message.reply_to_message.from_user
-        character = await get_life_character(replied_user.id)
-
-        if character is None:
-            return TargetResult(
-                telegram_id=replied_user.id,
-                username=normalize_username(replied_user.username),
-                error="❌ Aucun personnage MANUWORLD trouvé pour ce joueur.",
-            )
-
-        target_id = int(character.get("telegram_id") or replied_user.id)
-
-        if not allow_self and target_id == int(actor.id):
-            return TargetResult(
-                character=character,
-                telegram_id=target_id,
-                username=normalize_username(replied_user.username),
-                error="❌ Tu ne peux pas utiliser cette action sur toi-même.",
-            )
-
-        return TargetResult(
-            character=character,
-            telegram_id=target_id,
-            username=normalize_username(replied_user.username),
-        )
-
-    username = get_target_username(update)
-
-    # --------------------------------------------------------
-    # AUCUNE CIBLE
-    # --------------------------------------------------------
-
-    if not username:
-
-        if allow_self:
-
-            character = await get_life_character(actor.id)
-
-            if character:
-
-                return TargetResult(
-                    character=character,
-                    telegram_id=actor.id,
-                    username=normalize_username(actor.username),
-                )
-
-        return TargetResult(
-            error=(
-                "❌ Aucun joueur ciblé.\n\n"
-                "Utilise `@username` ou réponds "
-                "au message du joueur."
-            )
-        )
-
-    # --------------------------------------------------------
-    # RECHERCHE DANS MANUWORLD
-    # --------------------------------------------------------
-
-    character = await get_life_character_by_username(username)
-
-    if character is None:
-
-        return TargetResult(
-            username=username,
-            error=(
-                f"❌ Aucun personnage MANUWORLD trouvé "
-                f"pour @{username}."
-            ),
-        )
-
-    # --------------------------------------------------------
-    # TELEGRAM ID
-    # --------------------------------------------------------
-
-    target_id = character.get("telegram_id")
-
-    # --------------------------------------------------------
-    # EMPECHE L'AUTO-CIBLAGE
-    # --------------------------------------------------------
-
-    if not allow_self and target_id == actor.id:
-
-        return TargetResult(
-            character=character,
-            telegram_id=target_id,
-            username=username,
-            error=(
-                "❌ Tu ne peux pas utiliser "
-                "cette action sur toi-même."
-            ),
-        )
-
-    return TargetResult(
-        character=character,
-        telegram_id=target_id,
-        username=username,
-    )
+    tid=int(target_user.id)
+    if not allow_self and tid==int(actor_user.id):
+        return TargetResult(None,error="❌ Tu ne peux pas te cibler toi-même.")
+    character=await get_life_character(tid)
+    if not character:
+        return TargetResult(None,tid,"❌ Ce joueur n'a pas encore de personnage MANUWORLD.",source)
+    return TargetResult(dict(character),tid,None,source)
 
 
-# ============================================================
-# HELPER POUR LES HANDLERS
-# ============================================================
-
-async def require_target(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    *,
-    allow_self: bool = False,
-):
-    """
-    Fonction pratique pour les handlers.
-
-    Exemple :
-
-        target = await require_target(
-            update,
-            context
-        )
-
-        if target is None:
-            return
-
-        target_id = target["telegram_id"]
-    """
-
-    result = await resolve_target(
-        update,
-        allow_self=allow_self,
-    )
-
-    # --------------------------------------------------------
-    # ERREUR
-    # --------------------------------------------------------
-
-    if not result.found or result.error:
-
-        if update.effective_message and result.error:
-
-            await update.effective_message.reply_text(
-                result.error
-            )
-
-        return None
-
-    # --------------------------------------------------------
-    # SAUVEGARDE TEMPORAIRE
-    # --------------------------------------------------------
-
-    context.user_data["life_target_id"] = result.telegram_id
-
-    context.user_data["life_target_username"] = (
-        result.username
-    )
-
-    return result.character
+async def require_target(update, *, allow_self: bool=False) -> TargetResult:
+    result=await resolve_target(update,allow_self=allow_self)
+    if result.character is None and result.error:
+        return result
+    return result
 
 
-# ============================================================
-# PERSONNAGE DU JOUEUR ACTUEL
-# ============================================================
-
-async def get_actor_character(update: Update):
-    """
-    Récupère le personnage MANUWORLD
-    de l'utilisateur qui exécute la commande.
-    """
-
-    user = update.effective_user
-
-    if user is None:
-        return None
-
-    return await get_life_character(user.id)
+async def get_actor_character(update) -> dict[str,Any] | None:
+    u=update.effective_user
+    if not u:return None
+    row=await get_life_character(u.id)
+    return dict(row) if row else None

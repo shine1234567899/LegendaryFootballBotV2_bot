@@ -5,7 +5,7 @@ from telegram.ext import CommandHandler, ContextTypes
 from sqlalchemy import text
 
 from config import OWNER_IDS
-from database.database import AsyncSessionLocal
+from life_world.database import AsyncSessionLocal
 from life_world.utils.targeting import resolve_target
 
 
@@ -61,14 +61,18 @@ async def addlifecoins(
         )
         return
 
+    # Owner target syntax is also reply/@username; numeric Telegram IDs are no longer requested.
     try:
-        target_id = int(context.args[0])
-        amount = int(context.args[1])
+        amount = int(context.args[-1].replace(" ", "").replace(",", ""))
     except ValueError:
-        await message.reply_text(
-            "❌ L'ID Telegram et le montant doivent être numériques."
-        )
+        await message.reply_text("❌ Le montant doit être numérique.")
         return
+
+    target_result = await resolve_target(update, allow_self=True)
+    if target_result.character is None:
+        await message.reply_text(target_result.error or "❌ Joueur introuvable.")
+        return
+    target_id = int(target_result.telegram_id or target_result.character["telegram_id"])
 
     if amount <= 0:
         await message.reply_text(

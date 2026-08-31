@@ -240,6 +240,7 @@ async def create_company(
                     capital,
                     treasury,
                     status,
+                    active,
                     reputation,
                     credibility
                 )
@@ -251,6 +252,7 @@ async def create_company(
                     :capital,
                     :treasury,
                     :status,
+                    TRUE,
                     :reputation,
                     :credibility
                 )
@@ -822,7 +824,7 @@ async def get_company_members(
                     ON c.id = m.character_id
                 WHERE m.company_id = :company_id
                 {condition}
-                ORDER BY m.joined_at ASC
+                ORDER BY m.hired_at ASC
                 """
             ),
             {
@@ -1808,3 +1810,206 @@ __all__ = [
     "get_job_ads",
     "apply_to_job",
 ]
+
+# ============================================================
+# ADMINISTRATION D'ENTREPRISE [MWL]
+# ============================================================
+
+async def pay_company_salaries(
+    company_id: int,
+    owner_character_id: int,
+) -> dict[str, Any]:
+    """Pay all active real employees from company treasury."""
+    async with AsyncSessionLocal() as session:
+        company_result = await session.execute(text("""
+            SELECT id, name, treasury, owner_character_id, status, active
+            FROM life_companies
+            WHERE id=:company_id
+            FOR UPDATE
+        """), {"company_id": int(company_id)})
+        company = company_result.mappings().first()
+
+        if company is None:
+            return {"success": False, "message": "❌ Entreprise introuvable."}
+        if int(company["owner_character_id"] or -1) != int(owner_character_id):
+            return {"success": False, "message": "❌ Seul le PDG peut payer les salaires."}
+        if str(company["status"] or "active").lower() != "active" or not company["active"]:
+            return {"success": False, "message": "❌ Cette entreprise est fermée."}
+
+        employees_result = await session.execute(text("""
+            SELECT id, character_id, salary, position
+            FROM life_company_members
+            WHERE company_id=:company_id
+              AND status='active'
+              AND character_id IS NOT NULL
+              AND character_id <> :owner_id
+              AND salary > 0
+            ORDER BY id
+            FOR UPDATE
+        """), {
+            "company_id": int(company_id),
+            "owner_id": int(owner_character_id),
+        })
+        employees = [dict(r) for r in employees_result.mappings().all()]
+
+        total = sum(int(e["salary"] or 0) for e in employees)
+        treasury = int(company["treasury"] or 0)
+
+        if not employees:
+            await session.rollback()
+            return {"success": False, "message": "ℹ️ Aucun salaire à payer."}
+        if treasury < total:
+            await session.rollback()
+            return {
+                "success": False,
+                "message": (
+                    f"❌ Trésorerie insuffisante.\n"
+                    f"💰 Trésorerie : {format_money(treasury)} FCFA\n"
+                    f"🧾 Total des salaires : {format_money(total)} FCFA"
+                ),
+            }
+
+        await session.execute(text("""
+            UPDATE life_companies
+            SET treasury=treasury-:total, updated_at=NOW()
+            WHERE id=:company_id
+        """), {"total": total, "company_id": int(company_id)})
+
+        paid = 0
+        for employee in employees:
+            salary = int(employee["salary"] or 0)
+            await session.execute(text("""
+                UPDATE life_characters
+                SET balance=balance+:salary, updated_at=NOW()
+                WHERE id=:character_id
+            """), {
+                "salary": salary,
+                "character_id": int(employee["character_id"]),
+            })
+            paid += 1
+            await session.execute(text("""
+                INSERT INTO life_company_transactions
+                    (company_id, character_id, transaction_type, amount, balance_after, description)
+                VALUES
+                    (:company_id, :character_id, 'salary', :amount,
+                     (SELECT treasury FROM life_companies WHERE id=:company_id),
+                     :description)
+            """), {
+                "company_id": int(company_id),
+                "character_id": int(employee["character_id"]),
+                "amount": -salary,
+                "description": f"Salaire — {employee['position'] or 'Employee'}",
+            })
+
+        new_treasury = treasury - total
+        await session.commit()
+
+    return {
+        "success": True,
+        "paid": paid,
+        "total": total,
+        "treasury": new_treasury,
+        "message": (
+            f"✅ **SALAIRES PAYÉS**\n"
+            f"👥 Employés payés : {paid}\n"
+            f"💸 Total : {format_money(total)} FCFA\n"
+            f"🏦 Trésorerie restante : {format_money(new_treasury)} FCFA"
+        ),
+    }
+
+
+async def destroy_company(
+    company_id: int,
+    owner_character_id: int,
+) -> dict[str, Any]:
+    """
+    Close and permanently remove a company.
+
+    Remaining treasury is returned to the CEO before deletion.
+    Cascading foreign keys remove company-owned ads/contracts/etc.
+    """
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(text("""
+            SELECT id, name, treasury, owner_character_id, status, active
+            FROM life_companies
+            WHERE id=:company_id
+            FOR UPDATE
+        """), {"company_id": int(company_id)})
+        company = result.mappings().first()
+
+        if company is None:
+            return {"success": False, "message": "❌ Entreprise introuvable."}
+        if int(company["owner_character_id"] or -1) != int(owner_character_id):
+            return {"success": False, "message": "❌ Seul le PDG peut détruire l'entreprise."}
+
+        refund = int(company["treasury"] or 0)
+        name = str(company["name"])
+
+        if refund > 0:
+            await session.execute(text("""
+                UPDATE life_characters
+                SET balance=balance+:amount, updated_at=NOW()
+                WHERE id=:owner_id
+            """), {"amount": refund, "owner_id": int(owner_character_id)})
+
+        await session.execute(text("""
+            DELETE FROM life_companies
+            WHERE id=:company_id
+        """), {"company_id": int(company_id)})
+
+        await session.commit()
+
+    return {
+        "success": True,
+        "refund": refund,
+        "message": (
+            f"🗑️ **ENTREPRISE DÉTRUITE**\n"
+            f"🏢 {name}\n"
+            f"💰 Trésorerie rendue au PDG : {format_money(refund)} FCFA"
+        ),
+    }
+
+
+async def company_withdraw_to_owner(
+    company_id: int,
+    owner_character_id: int,
+    amount: int,
+) -> dict[str, Any]:
+    """Explicit alias for the CEO withdrawal operation."""
+    return await withdraw_from_company(
+        company_id,
+        owner_character_id,
+        amount,
+    )
+
+
+async def set_employee_salary(company_id:int, owner_character_id:int, target_character_id:int, salary:int)->dict[str,Any]:
+    salary=max(0,int(salary))
+    async with AsyncSessionLocal() as session:
+        owner=(await session.execute(text("SELECT owner_character_id FROM life_companies WHERE id=:id FOR UPDATE"),{"id":int(company_id)})).scalar()
+        if owner is None:return {"success":False,"message":"❌ Entreprise introuvable."}
+        if int(owner)!=int(owner_character_id):return {"success":False,"message":"❌ Seul le PDG peut modifier les salaires."}
+        result=await session.execute(text("""
+            UPDATE life_company_members SET salary=:salary
+            WHERE company_id=:company_id AND character_id=:character_id AND status='active'
+            RETURNING position
+        """),{"salary":salary,"company_id":int(company_id),"character_id":int(target_character_id)})
+        row=result.mappings().first()
+        if not row:return {"success":False,"message":"❌ Employé actif introuvable."}
+        await session.commit()
+    return {"success":True,"message":f"✅ Salaire de **{row['position']}** fixé à **{format_money(salary)} FCFA**."}
+
+async def fire_employee(company_id:int, owner_character_id:int, target_character_id:int)->dict[str,Any]:
+    async with AsyncSessionLocal() as session:
+        owner=(await session.execute(text("SELECT owner_character_id FROM life_companies WHERE id=:id FOR UPDATE"),{"id":int(company_id)})).scalar()
+        if owner is None:return {"success":False,"message":"❌ Entreprise introuvable."}
+        if int(owner)!=int(owner_character_id):return {"success":False,"message":"❌ Seul le PDG peut licencier."}
+        result=await session.execute(text("""
+            UPDATE life_company_members SET status='inactive',left_at=NOW()
+            WHERE company_id=:company_id AND character_id=:character_id AND status='active'
+            RETURNING position
+        """),{"company_id":int(company_id),"character_id":int(target_character_id)})
+        row=result.mappings().first()
+        if not row:return {"success":False,"message":"❌ Employé actif introuvable."}
+        await session.commit()
+    return {"success":True,"message":f"👋 Employé licencié du poste **{row['position']}**."}

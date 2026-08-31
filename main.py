@@ -94,9 +94,15 @@ from life_world.handlers.friendship import (
 from life_world.handlers.health import (
     register_health_handlers,
 )
+from life_world.handlers.hospital import (
+    register_hospital_handlers,
+)
 
 from life_world.handlers.housing import (
     register_housing_handlers,
+)
+from life_world.handlers.politics import (
+    register_politics_handlers,
 )
 
 from life_world.handlers.inventory import (
@@ -118,6 +124,9 @@ from life_world.handlers.skills import (
 from life_world.handlers.wealth import (
     register_wealth_handlers,
 )
+
+from life_world.handlers.mwl_core import register_mwl_core_handlers
+from life_world.core import ensure_v3_schema
 
 from life_world.handlers.economy import (
     addlifecoins_handler,
@@ -480,6 +489,7 @@ async def post_init(
         await ensure_life_tables()
 
         await ensure_life_world_migrations()
+        await ensure_v3_schema()
 
         print(
             "✅ [MWL] MANUWORLD database ready."
@@ -1203,6 +1213,7 @@ def main():
     )
 
     # Core systems with their own complete registration.
+    register_mwl_core_handlers(application)
     register_lifestyle_stats_handlers(application)
     register_business_handlers(application)
     register_jobs_handlers(application)
@@ -1308,7 +1319,9 @@ def main():
     register_marriage_handlers(application)
     register_friendship_handlers(application)
     register_health_handlers(application)
+    register_hospital_handlers(application)
     register_housing_handlers(application)
+    register_politics_handlers(application)
     register_inventory_handlers(application)
     register_life_events_handlers(application)
     register_expenses_handlers(application)

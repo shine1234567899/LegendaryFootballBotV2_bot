@@ -1,214 +1,103 @@
 """
-MANUWORLD — BUSINESS HANDLER
+MANUWORLD — BUSINESS [MWL]
 
-Interface Telegram du système d'entreprises.
+Commandes simples :
+/business
+/business_create <nom> <type> <capital> [description]
+/business_withdraw <company_id> <montant>
+/business_payroll <company_id>
+/business_destroy <company_id>
 
-Commandes :
-    /business
-    /business_create <nom> <type> <capital> [description]
-    /businesses
-
-IMPORTANT :
-    main.py n'est pas modifié ici.
+Les opérations sensibles sont réservées au PDG.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from telegram import (
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    Update,
-)
-from telegram.ext import (
-    Application,
-    CallbackQueryHandler,
-    CommandHandler,
-    ContextTypes,
-)
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
 from life_world.database import get_life_character
-
 from life_world.systems.business_system import (
     create_company,
-    get_company,
-    get_character_companies,
-    get_company_members,
-    get_shareholders,
-    get_company_treasury,
+    destroy_company,
     format_company,
+    get_character_companies,
+    get_company,
+    get_company_members,
+    get_company_treasury,
+    get_shareholders,
+    pay_company_salaries,
+    withdraw_from_company,
+    set_employee_salary,
+    fire_employee,
 )
 
 
-# ============================================================
-# UTILITAIRES
-# ============================================================
-
-async def get_actor(
-    update: Update,
-) -> dict[str, Any] | None:
-
+async def get_actor(update: Update) -> dict[str, Any] | None:
     user = update.effective_user
-
     if user is None:
         return None
+    character = await get_life_character(user.id)
+    return dict(character) if character else None
 
-    character = await get_life_character(
-        user.id
-    )
 
-    if character is None:
-        return None
-
-    return dict(character)
+def format_money(value: int) -> str:
+    return f"{int(value or 0):,}".replace(",", " ")
 
 
 def business_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🏢 Mes entreprises", callback_data="business:list")]
+    ])
 
-    return InlineKeyboardMarkup(
+
+def company_keyboard(company_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
         [
-            [
-                InlineKeyboardButton(
-                    "🏢 Mes entreprises",
-                    callback_data="business:list",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "🔄 Actualiser",
-                    callback_data="business:list",
-                )
-            ],
-        ]
-    )
-
-
-def company_keyboard(
-    company_id: int,
-) -> InlineKeyboardMarkup:
-
-    return InlineKeyboardMarkup(
+            InlineKeyboardButton("👥 Membres", callback_data=f"business:members:{company_id}"),
+            InlineKeyboardButton("💰 Trésorerie", callback_data=f"business:treasury:{company_id}"),
+        ],
         [
-            [
-                InlineKeyboardButton(
-                    "👥 Membres",
-                    callback_data=f"business:members:{company_id}",
-                ),
-                InlineKeyboardButton(
-                    "📊 Actionnaires",
-                    callback_data=f"business:shares:{company_id}",
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    "💰 Trésorerie",
-                    callback_data=f"business:treasury:{company_id}",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "⬅️ Mes entreprises",
-                    callback_data="business:list",
-                )
-            ],
-        ]
-    )
+            InlineKeyboardButton("💵 Retirer", callback_data=f"business:withdraw_help:{company_id}"),
+            InlineKeyboardButton("💸 Salaires", callback_data=f"business:payroll:{company_id}"),
+        ],
+        [
+            InlineKeyboardButton("🗑️ Détruire", callback_data=f"business:destroy:{company_id}"),
+        ],
+        [InlineKeyboardButton("⬅️ Mes entreprises", callback_data="business:list")],
+    ])
 
 
-# ============================================================
-# AFFICHAGE DES ENTREPRISES
-# ============================================================
-
-def format_companies(
-    companies: list[dict[str, Any]],
-) -> str:
-
+def format_companies(companies: list[dict]) -> str:
     if not companies:
-
         return (
             "🏢 **MES ENTREPRISES**\n\n"
-            "Tu ne possèdes aucune entreprise."
+            "Aucune entreprise.\n"
+            "Utilise `/business_create` pour en créer une."
         )
-
-    lines = [
-        "🏢 **MES ENTREPRISES**",
-        "━━━━━━━━━━━━━━━━━━━━",
-        "",
-    ]
-
-    for company in companies:
-
-        name = company.get(
-            "name",
-            "Entreprise",
-        )
-
-        company_type = company.get(
-            "company_type",
-            "—",
-        )
-
-        status = company.get(
-            "status",
-            "—",
-        )
-
-        treasury = int(
-            company.get("treasury") or 0
-        )
-
-        reputation = int(
-            company.get("reputation") or 0
-        )
-
-        lines.extend(
-            [
-                f"🏢 **{name}**",
-                f"   🆔 ID : {company.get('id')}",
-                f"   📂 Type : {company_type}",
-                f"   📊 Statut : {status}",
-                (
-                    f"   💰 Trésorerie : "
-                    f"{treasury:,} FCFA"
-                ).replace(",", " "),
-                f"   ⭐ Réputation : {reputation}",
-                "",
-            ]
-        )
-
+    lines = ["🏢 **MES ENTREPRISES**", "━━━━━━━━━━━━━━━━━━━━", ""]
+    for c in companies:
+        lines += [
+            f"🏢 **{c.get('name', 'Entreprise')}**",
+            f"🆔 ID : `{c.get('id')}`",
+            f"💰 Trésorerie : {format_money(c.get('treasury'))} FCFA",
+            f"📊 Statut : {c.get('status') or ('active' if c.get('active') else 'closed')}",
+            "",
+        ]
     return "\n".join(lines)
 
 
-# ============================================================
-# /BUSINESS
-# ============================================================
-
-async def business_command(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-):
-
+async def business_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.effective_message
-
+    actor = await get_actor(update)
     if message is None:
         return
-
-    actor = await get_actor(update)
-
     if actor is None:
-
-        await message.reply_text(
-            "❌ Tu n'as pas encore créé "
-            "ton personnage MANUWORLD."
-        )
-
+        await message.reply_text("❌ Crée d'abord ton personnage avec /life.")
         return
-
-    companies = await get_character_companies(
-        int(actor["id"])
-    )
-
+    companies = await get_character_companies(int(actor["id"]))
     await message.reply_text(
         format_companies(companies),
         reply_markup=business_keyboard(),
@@ -216,520 +105,278 @@ async def business_command(
     )
 
 
-# ============================================================
-# /BUSINESSES
-# ============================================================
-
-async def businesses_command(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-):
-
-    await business_command(
-        update,
-        context,
-    )
+async def businesses_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await business_command(update, context)
 
 
-# ============================================================
-# /BUSINESS_CREATE
-# ============================================================
-
-async def business_create_command(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-):
-
+async def business_create_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.effective_message
-
+    actor = await get_actor(update)
     if message is None:
         return
-
-    actor = await get_actor(update)
-
     if actor is None:
-
-        await message.reply_text(
-            "❌ Tu n'as pas encore créé "
-            "ton personnage MANUWORLD."
-        )
-
+        await message.reply_text("❌ Crée d'abord ton personnage avec /life.")
         return
-
     if len(context.args) < 3:
-
         await message.reply_text(
-            "🏢 **CRÉER UNE ENTREPRISE**\n"
-            "━━━━━━━━━━━━━━━━━━━━\n\n"
-            "Utilisation :\n"
+            "🏢 **CRÉER UNE ENTREPRISE**\n\n"
             "`/business_create <nom> <type> <capital> [description]`\n\n"
             "Exemple :\n"
-            "`/business_create ManuTech technology 1000000 Société informatique`",
+            "`/business_create ManuTech tech 1000000 Société informatique`",
             parse_mode="Markdown",
         )
-
         return
-
-    name = context.args[0]
-    company_type = context.args[1]
-
     try:
-        initial_capital = int(
-            context.args[2]
-        )
+        capital = int(context.args[2])
     except ValueError:
-
-        await message.reply_text(
-            "❌ Le capital doit être un nombre."
-        )
-
+        await message.reply_text("❌ Le capital doit être un nombre.")
         return
-
-    description = " ".join(
-        context.args[3:]
-    )
+    if capital < 0:
+        await message.reply_text("❌ Le capital ne peut pas être négatif.")
+        return
 
     result = await create_company(
-        owner_character_id=int(
-            actor["id"]
-        ),
-        name=name,
-        company_type=company_type,
-        description=description,
-        initial_capital=initial_capital,
+        int(actor["id"]),
+        context.args[0],
+        context.args[1],
+        " ".join(context.args[3:]),
+        capital,
     )
-
-    await message.reply_text(
-        result.get(
-            "message",
-            "❌ Impossible de créer l'entreprise.",
-        ),
-        parse_mode="HTML",
-    )
+    await message.reply_text(result["message"])
 
 
-# ============================================================
-# ENTREPRISE
-# ============================================================
-
-async def show_company(
-    query,
-    company_id: int,
-):
-
-    company = await get_company(
-        company_id
-    )
-
-    if company is None:
-
-        await query.edit_message_text(
-            "❌ Entreprise introuvable."
-        )
-
+async def business_withdraw_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.effective_message
+    actor = await get_actor(update)
+    if message is None:
         return
+    if actor is None:
+        await message.reply_text("❌ Personnage introuvable.")
+        return
+    if len(context.args) != 2:
+        await message.reply_text("Utilisation : `/business_withdraw <company_id> <montant>`", parse_mode="Markdown")
+        return
+    try:
+        company_id, amount = int(context.args[0]), int(context.args[1])
+    except ValueError:
+        await message.reply_text("❌ ID et montant doivent être numériques.")
+        return
+    result = await withdraw_from_company(company_id, int(actor["id"]), amount)
+    await message.reply_text(result["message"])
 
+
+async def business_payroll_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.effective_message
+    actor = await get_actor(update)
+    if message is None:
+        return
+    if actor is None:
+        await message.reply_text("❌ Personnage introuvable.")
+        return
+    if len(context.args) != 1:
+        await message.reply_text("Utilisation : `/business_payroll <company_id>`", parse_mode="Markdown")
+        return
+    try:
+        company_id = int(context.args[0])
+    except ValueError:
+        await message.reply_text("❌ ID entreprise invalide.")
+        return
+    result = await pay_company_salaries(company_id, int(actor["id"]))
+    await message.reply_text(result["message"], parse_mode="Markdown")
+
+
+async def business_destroy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.effective_message
+    actor = await get_actor(update)
+    if message is None:
+        return
+    if actor is None:
+        await message.reply_text("❌ Personnage introuvable.")
+        return
+    if len(context.args) != 1:
+        await message.reply_text("Utilisation : `/business_destroy <company_id>`", parse_mode="Markdown")
+        return
+    try:
+        company_id = int(context.args[0])
+    except ValueError:
+        await message.reply_text("❌ ID entreprise invalide.")
+        return
+    result = await destroy_company(company_id, int(actor["id"]))
+    await message.reply_text(result["message"], parse_mode="Markdown")
+
+
+async def show_company(query, company_id: int):
+    company = await get_company(company_id)
+    if company is None:
+        await query.edit_message_text("❌ Entreprise introuvable.")
+        return
     await query.edit_message_text(
         format_company(company),
-        reply_markup=company_keyboard(
-            company_id
-        ),
+        reply_markup=company_keyboard(company_id),
         parse_mode="HTML",
     )
 
 
-# ============================================================
-# MEMBRES
-# ============================================================
-
-async def show_members(
-    query,
-    company_id: int,
-):
-
-    members = await get_company_members(
-        company_id
-    )
-
+async def show_members(query, company_id: int):
+    members = await get_company_members(company_id)
     if not members:
-
-        text = (
-            "👥 **MEMBRES DE L'ENTREPRISE**\n\n"
-            "Aucun membre."
-        )
-
+        text = "👥 **MEMBRES**\n\nAucun membre."
     else:
-
-        lines = [
-            "👥 **MEMBRES DE L'ENTREPRISE**",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "",
-        ]
-
-        for member in members:
-
-            name = (
-                member.get("first_name")
-                or member.get("username")
-                or f"Personnage #{member.get('character_id')}"
-            )
-
-            grade = member.get(
-                "grade",
-                "—",
-            )
-
-            status = member.get(
-                "status",
-                "—",
-            )
-
-            lines.append(
-                f"👤 **{name}** — "
-                f"{grade} — {status}"
-            )
-
-        text = "\n".join(lines)
-
+        text = "👥 **MEMBRES**\n━━━━━━━━━━━━━━━━━━━━\n\n"
+        text += "\n".join(
+            f"• {m.get('username') or m.get('virtual_name') or m.get('first_name') or 'Employé'} — "
+            f"{m.get('position') or 'Employee'} — {format_money(m.get('salary'))} FCFA"
+            for m in members
+        )
     await query.edit_message_text(
         text,
-        reply_markup=InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton(
-                        "⬅️ Entreprise",
-                        callback_data=f"business:view:{company_id}",
-                    )
-                ]
-            ]
-        ),
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Entreprise", callback_data=f"business:view:{company_id}")]]),
         parse_mode="Markdown",
     )
 
 
-# ============================================================
-# ACTIONNAIRES
-# ============================================================
-
-async def show_shareholders(
-    query,
-    company_id: int,
-):
-
-    shareholders = await get_shareholders(
-        company_id
-    )
-
-    if not shareholders:
-
-        text = (
-            "📊 **ACTIONNAIRES**\n\n"
-            "Aucun actionnaire enregistré."
-        )
-
-    else:
-
-        lines = [
-            "📊 **ACTIONNAIRES**",
-            "━━━━━━━━━━━━━━━━━━━━",
-            "",
-        ]
-
-        for shareholder in shareholders:
-
-            name = (
-                shareholder.get("first_name")
-                or shareholder.get("username")
-                or f"Personnage #{shareholder.get('character_id')}"
-            )
-
-            shares = int(
-                shareholder.get("shares") or 0
-            )
-
-            percentage = shareholder.get(
-                "ownership_percentage"
-            )
-
-            line = (
-                f"👤 **{name}** — "
-                f"{shares} action(s)"
-            )
-
-            if percentage is not None:
-
-                line += (
-                    f" — {percentage}%"
-                )
-
-            lines.append(line)
-
-        text = "\n".join(lines)
-
-    await query.edit_message_text(
-        text,
-        reply_markup=InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton(
-                        "⬅️ Entreprise",
-                        callback_data=f"business:view:{company_id}",
-                    )
-                ]
-            ]
-        ),
-        parse_mode="Markdown",
-    )
-
-
-# ============================================================
-# TRÉSORERIE
-# ============================================================
-
-async def show_treasury(
-    query,
-    company_id: int,
-):
-
-    company = await get_company(
-        company_id
-    )
-
+async def show_treasury(query, company_id: int):
+    company = await get_company(company_id)
     if company is None:
-
-        await query.edit_message_text(
-            "❌ Entreprise introuvable."
-        )
-
+        await query.edit_message_text("❌ Entreprise introuvable.")
         return
-
-    treasury = await get_company_treasury(
-        company_id
-    )
-
+    treasury = await get_company_treasury(company_id)
     await query.edit_message_text(
-        (
-            "💰 **TRÉSORERIE DE L'ENTREPRISE**\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            f"🏢 {company.get('name', 'Entreprise')}\n\n"
-            f"💵 **{treasury:,} FCFA**"
-        ).replace(",", " "),
-        reply_markup=InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton(
-                        "⬅️ Entreprise",
-                        callback_data=f"business:view:{company_id}",
-                    )
-                ]
-            ]
-        ),
+        f"💰 **TRÉSORERIE**\n━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🏢 {company.get('name')}\n"
+        f"💵 **{format_money(treasury)} FCFA**",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Entreprise", callback_data=f"business:view:{company_id}")]]),
         parse_mode="Markdown",
     )
 
 
-# ============================================================
-# CALLBACK
-# ============================================================
-
-async def business_callback(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-):
-
+async def business_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-
-    if query is None:
-        return
-
-    await query.answer()
-
     actor = await get_actor(update)
-
-    if actor is None:
-
-        await query.edit_message_text(
-            "❌ Personnage MANUWORLD introuvable."
-        )
-
+    if query is None or actor is None:
         return
-
-    data = str(
-        query.data or ""
-    )
-
-    parts = data.split(":")
-
-    if len(parts) < 2:
-
-        await query.edit_message_text(
-            "❌ Action inconnue."
-        )
-
-        return
-
-    action = parts[1]
-
-    # --------------------------------------------------------
-    # LISTE
-    # --------------------------------------------------------
+    await query.answer()
+    parts = str(query.data or "").split(":")
+    action = parts[1] if len(parts) > 1 else ""
 
     if action == "list":
-
-        companies = await get_character_companies(
-            int(actor["id"])
-        )
-
+        companies = await get_character_companies(int(actor["id"]))
+        buttons = [
+            [InlineKeyboardButton(c["name"], callback_data=f"business:view:{c['id']}")]
+            for c in companies
+        ]
+        buttons.append([InlineKeyboardButton("🔄 Actualiser", callback_data="business:list")])
         await query.edit_message_text(
             format_companies(companies),
-            reply_markup=business_keyboard(),
+            reply_markup=InlineKeyboardMarkup(buttons),
             parse_mode="Markdown",
         )
-
         return
 
-    # --------------------------------------------------------
-    # VUE ENTREPRISE
-    # --------------------------------------------------------
-
-    if action in {
-        "view",
-        "members",
-        "shares",
-        "treasury",
-    }:
-
-        if len(parts) < 3:
-
-            await query.edit_message_text(
-                "❌ Entreprise invalide."
-            )
-
-            return
-
-        try:
-            company_id = int(
-                parts[2]
-            )
-        except ValueError:
-
-            await query.edit_message_text(
-                "❌ ID entreprise invalide."
-            )
-
-            return
-
-        company = await get_company(
-            company_id
-        )
-
-        if company is None:
-
-            await query.edit_message_text(
-                "❌ Entreprise introuvable."
-            )
-
-            return
-
-        companies = await get_character_companies(
-            int(actor["id"])
-        )
-
-        owned_company_ids = {
-            int(
-                company_item["id"]
-            )
-            for company_item in companies
-        }
-
-        if company_id not in owned_company_ids:
-
-            await query.edit_message_text(
-                "❌ Tu n'as pas accès à cette entreprise."
-            )
-
-            return
-
-        if action == "view":
-
-            await show_company(
-                query,
-                company_id,
-            )
-
-        elif action == "members":
-
-            await show_members(
-                query,
-                company_id,
-            )
-
-        elif action == "shares":
-
-            await show_shareholders(
-                query,
-                company_id,
-            )
-
-        elif action == "treasury":
-
-            await show_treasury(
-                query,
-                company_id,
-            )
-
+    if len(parts) < 3:
+        await query.edit_message_text("❌ Entreprise invalide.")
+        return
+    try:
+        company_id = int(parts[2])
+    except ValueError:
+        await query.edit_message_text("❌ ID entreprise invalide.")
         return
 
-    await query.edit_message_text(
-        "❌ Action inconnue."
-    )
+    company = await get_company(company_id)
+    if company is None:
+        await query.edit_message_text("❌ Entreprise introuvable.")
+        return
 
+    if int(company.get("owner_character_id") or -1) != int(actor["id"]):
+        await query.edit_message_text("❌ Seul le PDG peut gérer cette entreprise.")
+        return
 
-# ============================================================
-# ENREGISTREMENT
-# ============================================================
-
-def register_business_handlers(
-    application: Application,
-) -> None:
-
-    application.add_handler(
-        CommandHandler(
-            "business",
-            business_command,
+    if action == "view":
+        await show_company(query, company_id)
+    elif action == "members":
+        await show_members(query, company_id)
+    elif action == "treasury":
+        await show_treasury(query, company_id)
+    elif action == "payroll":
+        result = await pay_company_salaries(company_id, int(actor["id"]))
+        await query.edit_message_text(result["message"], parse_mode="Markdown")
+    elif action == "withdraw_help":
+        await query.edit_message_text(
+            "💵 **RETIRER DE LA TRÉSORERIE**\n\n"
+            f"Utilise : `/business_withdraw {company_id} <montant>`\n\n"
+            "L'argent est versé directement sur le compte du PDG.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("⬅️ Entreprise", callback_data=f"business:view:{company_id}")]
+            ]),
+            parse_mode="Markdown",
         )
-    )
-
-    application.add_handler(
-        CommandHandler(
-            "businesses",
-            businesses_command,
+    elif action == "destroy":
+        await query.edit_message_text(
+            "⚠️ **DÉTRUIRE L'ENTREPRISE ?**\n\n"
+            "Cette action supprime définitivement l'entreprise.\n"
+            "La trésorerie restante sera versée au PDG.",
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("✅ Confirmer", callback_data=f"business:destroy_confirm:{company_id}"),
+                    InlineKeyboardButton("❌ Annuler", callback_data=f"business:view:{company_id}"),
+                ]
+            ]),
+            parse_mode="Markdown",
         )
-    )
-
-    application.add_handler(
-        CommandHandler(
-            "business_create",
-            business_create_command,
-        )
-    )
-
-    application.add_handler(
-        CallbackQueryHandler(
-            business_callback,
-            pattern=r"^business:",
-        )
-    )
+    elif action == "destroy_confirm":
+        result = await destroy_company(company_id, int(actor["id"]))
+        await query.edit_message_text(result["message"], parse_mode="Markdown")
 
 
-# ============================================================
-# EXPORTS
-# ============================================================
+def register_business_handlers(application: Application) -> None:
+    application.add_handler(CommandHandler("business", business_command))
+    application.add_handler(CommandHandler("businesses", businesses_command))
+    application.add_handler(CommandHandler("business_create", business_create_command))
+    application.add_handler(CommandHandler("business_withdraw", business_withdraw_command))
+    application.add_handler(CommandHandler("business_payroll", business_payroll_command))
+    application.add_handler(CommandHandler("business_destroy", business_destroy_command))
+    application.add_handler(CommandHandler("business_setsalary", business_setsalary_command))
+    application.add_handler(CommandHandler("business_fire", business_fire_command))
+    application.add_handler(CallbackQueryHandler(business_callback, pattern=r"^business:"))
+
 
 __all__ = [
-    "business_command",
-    "businesses_command",
-    "business_create_command",
-    "business_callback",
-    "register_business_handlers",
+    "business_command", "businesses_command", "business_create_command",
+    "business_withdraw_command", "business_payroll_command", "business_destroy_command",
+    "business_callback", "register_business_handlers",
 ]
+
+
+async def _company_target(update: Update):
+    from life_world.utils.targeting import resolve_target
+    return await resolve_target(update, allow_self=False)
+
+
+async def business_setsalary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message=update.effective_message; actor=await get_actor(update)
+    if not message:return
+    if not actor:return await message.reply_text("❌ Personnage introuvable.")
+    if len(context.args)<1:
+        return await message.reply_text("Réponds à l'employé : `/business_setsalary 50000`\nou utilise `/business_setsalary @username 50000`",parse_mode="Markdown")
+    try: salary=int(context.args[-1].replace(" ","").replace(",",""))
+    except ValueError:return await message.reply_text("❌ Salaire invalide.")
+    target=await _company_target(update)
+    if not target.character:return await message.reply_text(target.error or "❌ Employé introuvable.")
+    companies=await get_character_companies(int(actor["id"]))
+    if not companies:return await message.reply_text("❌ Tu n'as pas d'entreprise.")
+    company_id=int(context.args[0]) if context.args[0].isdigit() and len(context.args)>1 else int(companies[0]["id"])
+    result=await set_employee_salary(company_id,int(actor["id"]),int(target.character["id"]),salary)
+    await message.reply_text(result["message"],parse_mode="Markdown")
+
+
+async def business_fire_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message=update.effective_message; actor=await get_actor(update)
+    if not message:return
+    if not actor:return await message.reply_text("❌ Personnage introuvable.")
+    target=await _company_target(update)
+    if not target.character:return await message.reply_text(target.error or "❌ Employé introuvable.")
+    companies=await get_character_companies(int(actor["id"]))
+    if not companies:return await message.reply_text("❌ Tu n'as pas d'entreprise.")
+    company_id=int(context.args[0]) if context.args and context.args[0].isdigit() else int(companies[0]["id"])
+    result=await fire_employee(company_id,int(actor["id"]),int(target.character["id"]))
+    await message.reply_text(result["message"],parse_mode="Markdown")

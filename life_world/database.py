@@ -928,6 +928,28 @@ async def ensure_life_tables() -> None:
         await session.flush()
 
         # ----------------------------------------------------------
+        # BUSINESS COMPATIBILITY MIGRATION [MWL]
+        # Existing installations may have been created before these
+        # company fields existed. Never drop existing data.
+        # ----------------------------------------------------------
+        for statement in (
+            "ALTER TABLE life_companies ADD COLUMN IF NOT EXISTS company_type VARCHAR(50) NOT NULL DEFAULT 'general'",
+            "ALTER TABLE life_companies ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE life_companies ADD COLUMN IF NOT EXISTS status VARCHAR(30) NOT NULL DEFAULT 'active'",
+            "ALTER TABLE life_companies ADD COLUMN IF NOT EXISTS owner_character_id BIGINT",
+            "ALTER TABLE life_company_members ADD COLUMN IF NOT EXISTS salary BIGINT NOT NULL DEFAULT 0",
+            "ALTER TABLE life_company_members ADD COLUMN IF NOT EXISTS position VARCHAR(80) NOT NULL DEFAULT 'Employee'",
+            "ALTER TABLE life_company_members ADD COLUMN IF NOT EXISTS grade VARCHAR(40) NOT NULL DEFAULT 'employee'",
+            "ALTER TABLE life_company_members ADD COLUMN IF NOT EXISTS joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+            "ALTER TABLE life_company_positions ADD COLUMN IF NOT EXISTS title VARCHAR(100) NOT NULL DEFAULT 'Poste'",
+            "ALTER TABLE life_company_positions ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE life_company_positions ADD COLUMN IF NOT EXISTS salary BIGINT NOT NULL DEFAULT 0",
+            "ALTER TABLE life_company_positions ADD COLUMN IF NOT EXISTS slots INTEGER NOT NULL DEFAULT 1",
+            "ALTER TABLE life_company_positions ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'open'",
+        ):
+            await session.execute(text(statement))
+
+        # ----------------------------------------------------------
         # PRE-FLIGHT MIGRATION [MWL]
         # Execute the core character table first. This is essential
         # for old PostgreSQL databases: CREATE TABLE IF NOT EXISTS
