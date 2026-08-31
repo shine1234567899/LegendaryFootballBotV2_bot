@@ -29,7 +29,12 @@ from telegram.ext import (
     ContextTypes,
 )
 
-from life_world.database import get_life_character
+from sqlalchemy import text
+
+from life_world.database import (
+    AsyncSessionLocal,
+    get_life_character,
+)
 
 from life_world.systems.housing_system import (
     housing_catalog,
@@ -231,9 +236,23 @@ async def show_housing_details(
             f"{int(purchase_price):,} FCFA"
         )
 
-    buttons = housing_action_buttons(
-        housing_type
-    )
+    if housing_type == "room":
+        buttons = [
+            [
+                (
+                    "lw_housing:roompay:yes",
+                    f"💰 Payer {daily_rent:,} FCFA",
+                ),
+                (
+                    "lw_housing:roompay:no",
+                    "❌ Ne pas payer",
+                ),
+            ],
+        ]
+    else:
+        buttons = housing_action_buttons(
+            housing_type
+        )
 
     buttons.append(
         [
@@ -530,6 +549,100 @@ async def housing_callback(
     # ACTIONS DE CONFIRMATION
     # --------------------------------------------------------
 
+    if data == "lw_housing:roompay:no":
+        await show_housing_details(query, "room")
+        return
+
+    if data == "lw_housing:roompay:yes":
+        username = str(
+            actor.get("username")
+            or actor.get("telegram_id")
+            or ""
+        ).strip()
+
+        from life_world.systems.housing_system import (
+            get_housing_type,
+            rent_housing,
+        )
+
+        room = get_housing_type("room")
+        rent = int(room["rent_daily"])
+
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                text(
+                    """
+                    SELECT balance
+                    FROM life_characters
+                    WHERE id = :id
+                    FOR UPDATE
+                    """
+                ),
+                {"id": int(actor["id"])},
+            )
+            row = result.mappings().first()
+            balance = int(row["balance"] or 0) if row else 0
+
+            if balance < rent:
+                await session.rollback()
+                await query.edit_message_text(
+                    f"❌ Solde insuffisant.\n\n"
+                    f"💰 Prix de la chambre : {rent:,} FCFA\n"
+                    f"💵 Ton solde : {balance:,} FCFA",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("⬅️ Retour", callback_data="lw_housing:view")]
+                    ]),
+                )
+                return
+
+            await session.execute(
+                text(
+                    """
+                    UPDATE life_characters
+                    SET balance = balance - :amount,
+                        updated_at = NOW()
+                    WHERE id = :id
+                    """
+                ),
+                {
+                    "amount": rent,
+                    "id": int(actor["id"]),
+                },
+            )
+            await session.commit()
+
+        result = rent_housing(username, "room")
+
+        if not result.get("success"):
+            # Roll back the debit if the housing record could not be created.
+            async with AsyncSessionLocal() as session:
+                await session.execute(
+                    text(
+                        """
+                        UPDATE life_characters
+                        SET balance = balance + :amount,
+                            updated_at = NOW()
+                        WHERE id = :id
+                        """
+                    ),
+                    {
+                        "amount": rent,
+                        "id": int(actor["id"]),
+                    },
+                )
+                await session.commit()
+
+        await query.edit_message_text(
+            result.get("message", "❌ Location impossible."),
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton(
+                    "🏠 Mon logement",
+                    callback_data="lw_housing:current",
+                )]
+            ]),
+        )
+        return
+
     if data.startswith(
         "lw_housing:confirmrent:"
     ):
@@ -620,12 +733,64 @@ async def housing_callback(
     if data == "lw_housing:confirmpayrent":
 
         username = str(
-            actor.get("username") or ""
-        )
+            actor.get("username")
+            or actor.get("telegram_id")
+            or ""
+        ).strip()
 
         from life_world.systems.housing_system import (
+            get_rent_due,
             pay_rent,
         )
+
+        due = int(get_rent_due(username) or 0)
+
+        if due > 0:
+            async with AsyncSessionLocal() as session:
+                balance_result = await session.execute(
+                    text(
+                        """
+                        SELECT balance
+                        FROM life_characters
+                        WHERE id = :id
+                        FOR UPDATE
+                        """
+                    ),
+                    {"id": int(actor["id"])},
+                )
+                row = balance_result.mappings().first()
+                balance = int(row["balance"] or 0) if row else 0
+
+                if balance < due:
+                    await session.rollback()
+                    await query.edit_message_text(
+                        f"❌ Solde insuffisant.\n\n"
+                        f"🧾 Loyer dû : {due:,} FCFA\n"
+                        f"💵 Solde : {balance:,} FCFA",
+                        reply_markup=InlineKeyboardMarkup([
+                            [InlineKeyboardButton(
+                                "🏠 Mon logement",
+                                callback_data="lw_housing:current",
+                            )]
+                        ]),
+                    )
+                    return
+
+                await session.execute(
+                    text(
+                        """
+                        UPDATE life_characters
+                        SET balance = balance - :amount,
+                            updated_at = NOW()
+                        WHERE id = :id
+                        """
+                    ),
+                    {
+                        "amount": due,
+                        "id": int(actor["id"]),
+                    },
+                )
+                await session.commit()
 
         result = pay_rent(
             username,

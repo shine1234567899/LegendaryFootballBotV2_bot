@@ -34,6 +34,8 @@ from life_world.database import get_life_character
 from life_world.systems.company_market_system import (
     buy_market_product,
     get_company_market,
+    get_global_market,
+    seed_permanent_market,
     get_market_product,
     search_market,
 )
@@ -281,6 +283,8 @@ async def market_command(
         )
         return
 
+    await seed_permanent_market()
+
     search = " ".join(
         context.args
     ).strip()
@@ -342,60 +346,8 @@ async def market_command(
 # ============================================================
 
 async def _get_market_products():
-    """
-    Récupère les offres actives de toutes les entreprises.
-    """
-
-    # Il n'existe pas de fonction globale dans le système
-    # pour cette lecture, donc on utilise une recherche large.
-    #
-    # Les recherches vides ne sont volontairement pas envoyées
-    # au système.
-    #
-    # Cette fonction sera remplacée par une fonction globale
-    # dédiée lorsqu'on développera les fonctions administratives
-    # du marché.
-    #
-    # Pour l'instant, elle retourne les offres des entreprises
-    # accessibles via la recherche générale.
-
-    from sqlalchemy import text
-
-    from life_world.database import AsyncSessionLocal
-
-    async with AsyncSessionLocal() as session:
-
-        result = await session.execute(
-            text(
-                """
-                SELECT
-                    m.id,
-                    m.company_id,
-                    m.product_name,
-                    m.category,
-                    m.price,
-                    m.stock,
-                    m.description,
-                    m.active,
-                    c.name AS company_name
-                FROM life_company_market m
-                INNER JOIN life_companies c
-                    ON c.id = m.company_id
-                WHERE m.active = TRUE
-                  AND c.active = TRUE
-                ORDER BY
-                    m.category ASC,
-                    m.product_name ASC,
-                    m.id ASC
-                LIMIT 100
-                """
-            )
-        )
-
-        return [
-            dict(row)
-            for row in result.mappings().all()
-        ]
+    """Retourne le catalogue permanent et les offres actives."""
+    return await get_global_market(limit=100)
 
 
 # ============================================================

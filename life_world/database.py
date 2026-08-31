@@ -321,7 +321,7 @@ async def ensure_life_tables() -> None:
             CREATE TABLE IF NOT EXISTS life_companies (
                 id BIGSERIAL PRIMARY KEY,
                 name VARCHAR(120) NOT NULL UNIQUE,
-                owner_character_id BIGINT NOT NULL
+                owner_character_id BIGINT
                     REFERENCES life_characters(id),
                 grade_id BIGINT REFERENCES life_company_grades(id),
                 capital BIGINT NOT NULL DEFAULT 0,
@@ -926,6 +926,61 @@ async def ensure_life_tables() -> None:
         # Existing records are preserved; NULL usernames remain NULL until
         # the Telegram user has a username.
         await session.flush()
+
+        # ----------------------------------------------------------
+        # PRE-FLIGHT MIGRATION [MWL]
+        # Execute the core character table first. This is essential
+        # for old PostgreSQL databases: CREATE TABLE IF NOT EXISTS
+        # does not add columns to an existing table, while later
+        # indexes depend on those columns.
+        # ----------------------------------------------------------
+        await session.execute(text(statements[0]))
+
+        required_character_columns = {
+            "username": "ALTER TABLE life_characters ADD COLUMN IF NOT EXISTS username VARCHAR(80)",
+            "last_study_at": "ALTER TABLE life_characters ADD COLUMN IF NOT EXISTS last_study_at TIMESTAMPTZ",
+            "last_work_at": "ALTER TABLE life_characters ADD COLUMN IF NOT EXISTS last_work_at TIMESTAMPTZ",
+            "school_class": "ALTER TABLE life_characters ADD COLUMN IF NOT EXISTS school_class VARCHAR(80)",
+            "school_year": "ALTER TABLE life_characters ADD COLUMN IF NOT EXISTS school_year INTEGER",
+            "school_xp": "ALTER TABLE life_characters ADD COLUMN IF NOT EXISTS school_xp BIGINT NOT NULL DEFAULT 0",
+            "school_xp_required": "ALTER TABLE life_characters ADD COLUMN IF NOT EXISTS school_xp_required BIGINT NOT NULL DEFAULT 100",
+            "school_last_exam_at": "ALTER TABLE life_characters ADD COLUMN IF NOT EXISTS school_last_exam_at TIMESTAMPTZ",
+            "current_diploma": "ALTER TABLE life_characters ADD COLUMN IF NOT EXISTS current_diploma VARCHAR(100)",
+        }
+
+        for statement in required_character_columns.values():
+            await session.execute(text(statement))
+
+        # Bank catalogue extensions.
+        for statement in (
+            "ALTER TABLE life_banks ADD COLUMN IF NOT EXISTS initial_deposit BIGINT NOT NULL DEFAULT 0",
+            "ALTER TABLE life_banks ADD COLUMN IF NOT EXISTS card_name VARCHAR(100)",
+            "ALTER TABLE life_banks ADD COLUMN IF NOT EXISTS card_type VARCHAR(40)",
+        ):
+            await session.execute(text(statement))
+
+        # Allow one virtual catalogue owner for the permanent market.
+        # Existing company ownership is untouched.
+        await session.execute(
+            text(
+                """
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1
+                        FROM information_schema.columns
+                        WHERE table_name='life_companies'
+                          AND column_name='owner_character_id'
+                    ) THEN
+                        ALTER TABLE life_companies
+                        ALTER COLUMN owner_character_id DROP NOT NULL;
+                    END IF;
+                END $$;
+                """
+            )
+        )
+
+        await session.commit()
 
         for statement in statements:
             await session.execute(text(statement))

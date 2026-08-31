@@ -558,6 +558,9 @@ QUESTIONS: dict[str, dict[str, list[dict[str, Any]]]] = {
 
 EXAM_COOLDOWN_SECONDS = 24 * 60 * 60
 
+# [MWL] /exam never requires school_xp to reach 100.
+# /study is optional preparation. A successful exam itself changes class.
+
 
 def _school_level_from_exam_type(exam_type: str) -> tuple[str, str, str | None]:
     mapping = {

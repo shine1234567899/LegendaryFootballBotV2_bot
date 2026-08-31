@@ -54,6 +54,149 @@ def _non_negative_int(value: Any) -> int:
     return value
 
 
+
+# ============================================================
+# MARKET — CATALOGUE PERMANENT MANUWORLD
+# ============================================================
+
+DEFAULT_MARKET_PRODUCTS = [
+    ("Apple iPhone 16", "smartphone", 850_000, 10, "Apple"),
+    ("Samsung Galaxy S25", "smartphone", 780_000, 10, "Samsung"),
+    ("Apple MacBook Air", "computer", 1_200_000, 8, "Apple"),
+    ("Sony PlayStation 5", "gaming", 650_000, 10, "Sony"),
+    ("JBL Headphones", "audio", 120_000, 15, "JBL"),
+    ("Apple AirPods Pro", "audio", 180_000, 15, "Apple"),
+    ("Apple Watch", "watch", 300_000, 10, "Apple"),
+    ("Samsung Galaxy Watch", "watch", 220_000, 10, "Samsung"),
+    ("Nike Air Max", "fashion", 150_000, 15, "Nike"),
+    ("Adidas Originals", "fashion", 130_000, 15, "Adidas"),
+    ("Puma Sneakers", "fashion", 110_000, 15, "Puma"),
+    ("Lacoste Polo", "fashion", 90_000, 15, "Lacoste"),
+    ("Ray-Ban Sunglasses", "accessory", 180_000, 10, "Ray-Ban"),
+    ("Rolex Classic", "luxury", 8_000_000, 3, "Rolex"),
+    ("Louis Vuitton Bag", "luxury", 1_800_000, 5, "Louis Vuitton"),
+    ("Gucci Bag", "luxury", 1_500_000, 5, "Gucci"),
+    ("Toyota Corolla", "vehicle", 12_000_000, 3, "Toyota"),
+    ("Mercedes-Benz C-Class", "vehicle", 35_000_000, 2, "Mercedes-Benz"),
+    ("Canon EOS Camera", "camera", 700_000, 6, "Canon"),
+    ("Sony Bravia TV", "electronics", 900_000, 6, "Sony"),
+]
+
+
+async def seed_permanent_market() -> int:
+    """
+    [MWL] Ensures the permanent branded catalogue exists.
+    Products are inserted only once and their stock is never reset.
+    """
+
+    async with AsyncSessionLocal() as session:
+        # A nullable owner is supported by the database migration.
+        company_result = await session.execute(
+            text(
+                """
+                SELECT id
+                FROM life_companies
+                WHERE name = 'MANUWORLD OFFICIAL MARKET'
+                LIMIT 1
+                """
+            )
+        )
+        company = company_result.first()
+
+        if company is None:
+            company_insert = await session.execute(
+                text(
+                    """
+                    INSERT INTO life_companies (
+                        name,
+                        owner_character_id,
+                        capital,
+                        treasury,
+                        reputation,
+                        credibility,
+                        health,
+                        total_revenue,
+                        active
+                    )
+                    VALUES (
+                        'MANUWORLD OFFICIAL MARKET',
+                        NULL,
+                        0,
+                        0,
+                        100,
+                        100,
+                        100,
+                        0,
+                        TRUE
+                    )
+                    RETURNING id
+                    """
+                )
+            )
+            company_id = int(company_insert.scalar_one())
+        else:
+            company_id = int(company[0])
+
+        inserted = 0
+
+        for product_name, category, price, stock, brand in DEFAULT_MARKET_PRODUCTS:
+            exists = await session.execute(
+                text(
+                    """
+                    SELECT 1
+                    FROM life_company_market
+                    WHERE company_id = :company_id
+                      AND product_name = :product_name
+                    LIMIT 1
+                    """
+                ),
+                {
+                    "company_id": company_id,
+                    "product_name": product_name,
+                },
+            )
+
+            if exists.first() is not None:
+                continue
+
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO life_company_market (
+                        company_id,
+                        product_name,
+                        category,
+                        price,
+                        stock,
+                        description,
+                        active
+                    )
+                    VALUES (
+                        :company_id,
+                        :product_name,
+                        :category,
+                        :price,
+                        :stock,
+                        :description,
+                        TRUE
+                    )
+                    """
+                ),
+                {
+                    "company_id": company_id,
+                    "product_name": product_name,
+                    "category": category,
+                    "price": price,
+                    "stock": stock,
+                    "description": f"Produit de marque {brand}.",
+                },
+            )
+            inserted += 1
+
+        await session.commit()
+        return inserted
+
+
 # ============================================================
 # ENTREPRISE
 # ============================================================

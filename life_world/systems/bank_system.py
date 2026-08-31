@@ -40,37 +40,149 @@ from database.database import AsyncSessionLocal
 
 DEFAULT_BANKS = [
     {
-        "name": "ManuBank",
-        "bank_type": "commercial",
-        "interest_rate": Decimal("2.5000"),
+        "name": "Manuella First Bank",
+        "bank_type": "premium",
+        "interest_rate": Decimal("8.0000"),
         "account_fee": 0,
-        "transfer_fee": 500,
-        "minimum_balance": 0,
-        "maximum_balance": None,
-        "prestige": 1,
-    },
-    {
-        "name": "Elite Bank",
-        "bank_type": "premium",
-        "interest_rate": Decimal("4.0000"),
-        "account_fee": 2_500,
-        "transfer_fee": 250,
-        "minimum_balance": 100_000,
-        "maximum_balance": None,
-        "prestige": 3,
-    },
-    {
-        "name": "Capital Bank",
-        "bank_type": "premium",
-        "interest_rate": Decimal("5.0000"),
-        "account_fee": 5_000,
+        "initial_deposit": 10_000_000,
         "transfer_fee": 100,
-        "minimum_balance": 500_000,
+        "minimum_balance": 10_000_000,
+        "maximum_balance": None,
+        "prestige": 11,
+        "card_name": "Manuella First Card",
+        "card_type": "premium",
+    },
+    {
+        "name": "Joy Joy Master",
+        "bank_type": "elite",
+        "interest_rate": Decimal("7.0000"),
+        "account_fee": 0,
+        "initial_deposit": 7_500_000,
+        "transfer_fee": 150,
+        "minimum_balance": 7_500_000,
+        "maximum_balance": None,
+        "prestige": 10,
+        "card_name": "Joy Joy Master",
+        "card_type": "elite",
+    },
+    {
+        "name": "Tessia Bank",
+        "bank_type": "premium",
+        "interest_rate": Decimal("6.5000"),
+        "account_fee": 0,
+        "initial_deposit": 6_000_000,
+        "transfer_fee": 200,
+        "minimum_balance": 6_000_000,
+        "maximum_balance": None,
+        "prestige": 9,
+        "card_name": "Tessia Premium",
+        "card_type": "premium",
+    },
+    {
+        "name": "Goat Bank",
+        "bank_type": "premium",
+        "interest_rate": Decimal("6.0000"),
+        "account_fee": 0,
+        "initial_deposit": 5_000_000,
+        "transfer_fee": 250,
+        "minimum_balance": 5_000_000,
+        "maximum_balance": None,
+        "prestige": 8,
+        "card_name": "Goat Card",
+        "card_type": "premium",
+    },
+    {
+        "name": "Lili Bank",
+        "bank_type": "premium",
+        "interest_rate": Decimal("5.5000"),
+        "account_fee": 0,
+        "initial_deposit": 3_500_000,
+        "transfer_fee": 300,
+        "minimum_balance": 3_500_000,
+        "maximum_balance": None,
+        "prestige": 7,
+        "card_name": "Lili Premium",
+        "card_type": "premium",
+    },
+    {
+        "name": "Elyra",
+        "bank_type": "premium",
+        "interest_rate": Decimal("5.2500"),
+        "account_fee": 0,
+        "initial_deposit": 3_000_000,
+        "transfer_fee": 300,
+        "minimum_balance": 3_000_000,
+        "maximum_balance": None,
+        "prestige": 6,
+        "card_name": "Elyra Card",
+        "card_type": "premium",
+    },
+    {
+        "name": "Nénou Master",
+        "bank_type": "card_bank",
+        "interest_rate": Decimal("4.7500"),
+        "account_fee": 0,
+        "initial_deposit": 2_500_000,
+        "transfer_fee": 350,
+        "minimum_balance": 2_500_000,
         "maximum_balance": None,
         "prestige": 5,
+        "card_name": "Nénou Master",
+        "card_type": "master",
+    },
+    {
+        "name": "Drav Visa",
+        "bank_type": "card_bank",
+        "interest_rate": Decimal("4.5000"),
+        "account_fee": 0,
+        "initial_deposit": 2_000_000,
+        "transfer_fee": 350,
+        "minimum_balance": 2_000_000,
+        "maximum_balance": None,
+        "prestige": 4,
+        "card_name": "Drav Visa",
+        "card_type": "visa",
+    },
+    {
+        "name": "Asuna Pay",
+        "bank_type": "payment_bank",
+        "interest_rate": Decimal("4.2500"),
+        "account_fee": 0,
+        "initial_deposit": 1_750_000,
+        "transfer_fee": 400,
+        "minimum_balance": 1_750_000,
+        "maximum_balance": None,
+        "prestige": 3,
+        "card_name": "Asuna Pay Card",
+        "card_type": "payment",
+    },
+    {
+        "name": "Luna Bank",
+        "bank_type": "bank",
+        "interest_rate": Decimal("4.0000"),
+        "account_fee": 0,
+        "initial_deposit": 1_500_000,
+        "transfer_fee": 450,
+        "minimum_balance": 1_500_000,
+        "maximum_balance": None,
+        "prestige": 2,
+        "card_name": "Luna Card",
+        "card_type": "standard",
+    },
+    {
+        "name": "Yui Bank",
+        "bank_type": "bank",
+        "interest_rate": Decimal("3.5000"),
+        "account_fee": 0,
+        "initial_deposit": 750_000,
+        "transfer_fee": 500,
+        "minimum_balance": 750_000,
+        "maximum_balance": None,
+        "prestige": 1,
+        "card_name": "Yui Card",
+        "card_type": "standard",
     },
 ]
-
 
 # ============================================================
 # UTILITAIRES
@@ -133,11 +245,26 @@ def validate_amount(
 # BANQUES
 # ============================================================
 
+async def ensure_bank_catalog_schema() -> None:
+    """[MWL] Add non-destructive fields required by the bank catalogue."""
+    async with AsyncSessionLocal() as session:
+        for statement in (
+            "ALTER TABLE life_banks ADD COLUMN IF NOT EXISTS initial_deposit BIGINT NOT NULL DEFAULT 0",
+            "ALTER TABLE life_banks ADD COLUMN IF NOT EXISTS card_name VARCHAR(100)",
+            "ALTER TABLE life_banks ADD COLUMN IF NOT EXISTS card_type VARCHAR(40)",
+        ):
+            await session.execute(text(statement))
+        await session.commit()
+
+
+
 async def seed_default_banks() -> int:
     """
     Ajoute les banques par défaut sans modifier
     celles qui existent déjà.
     """
+
+    await ensure_bank_catalog_schema()
 
     added = 0
 
@@ -174,6 +301,9 @@ async def seed_default_banks() -> int:
                         minimum_balance,
                         maximum_balance,
                         prestige,
+                        initial_deposit,
+                        card_name,
+                        card_type,
                         active
                     )
                     VALUES (
@@ -185,6 +315,9 @@ async def seed_default_banks() -> int:
                         :minimum_balance,
                         :maximum_balance,
                         :prestige,
+                        :initial_deposit,
+                        :card_name,
+                        :card_type,
                         TRUE
                     )
                     """
@@ -193,6 +326,53 @@ async def seed_default_banks() -> int:
             )
 
             added += 1
+
+        # Keep the public catalogue exactly aligned with MANUWORLD.
+        # Disable legacy banks that are not part of the official catalogue.
+        await session.execute(
+            text(
+                """
+                UPDATE life_banks
+                SET active = FALSE
+                WHERE LOWER(name) NOT IN (
+                    'manuella first bank',
+                    'joy joy master',
+                    'tessia bank',
+                    'goat bank',
+                    'lili bank',
+                    'elyra',
+                    'nénou master',
+                    'drav visa',
+                    'asuna pay',
+                    'luna bank',
+                    'yui bank'
+                )
+                """
+            )
+        )
+
+        # Update existing desired banks without changing their IDs.
+        for bank in DEFAULT_BANKS:
+            await session.execute(
+                text(
+                    """
+                    UPDATE life_banks
+                    SET bank_type = :bank_type,
+                        interest_rate = :interest_rate,
+                        account_fee = :account_fee,
+                        transfer_fee = :transfer_fee,
+                        minimum_balance = :minimum_balance,
+                        maximum_balance = :maximum_balance,
+                        prestige = :prestige,
+                        initial_deposit = :initial_deposit,
+                        card_name = :card_name,
+                        card_type = :card_type,
+                        active = TRUE
+                    WHERE LOWER(name) = LOWER(:name)
+                    """
+                ),
+                bank,
+            )
 
         await session.commit()
 
@@ -550,9 +730,9 @@ async def open_account(
             "account": existing,
         }
 
-    account_fee = int(
-        bank["account_fee"] or 0
-    )
+    account_fee = int(bank["account_fee"] or 0)
+    initial_deposit = int(bank.get("initial_deposit") or 0)
+    required_upfront = account_fee + initial_deposit
 
     async with AsyncSessionLocal() as session:
 
@@ -589,17 +769,17 @@ async def open_account(
             character["balance"] or 0
         )
 
-        if balance < account_fee:
+        if balance < required_upfront:
 
             return {
                 "success": False,
                 "message": (
                     "❌ Solde insuffisant pour ouvrir "
                     "ce compte.\n"
-                    f"💰 Solde : "
-                    f"{format_money(balance)} FCFA\n"
-                    f"🏦 Frais : "
-                    f"{format_money(account_fee)} FCFA"
+                    f"💰 Solde : {format_money(balance)} FCFA\n"
+                    f"🏦 Dépôt initial : {format_money(initial_deposit)} FCFA\n"
+                    f"🧾 Frais d'ouverture : {format_money(account_fee)} FCFA\n"
+                    f"💵 Total nécessaire : {format_money(required_upfront)} FCFA"
                 ),
             }
 
@@ -635,12 +815,9 @@ async def open_account(
                 "message": "❌ Impossible de générer le numéro du compte.",
             }
 
-        new_balance = (
-            balance
-            - account_fee
-        )
+        new_balance = balance - required_upfront
 
-        if account_fee > 0:
+        if required_upfront > 0:
 
             await session.execute(
                 text(
@@ -690,6 +867,7 @@ async def open_account(
                     character_id
                 ),
                 "account_number": account_number,
+                "initial_deposit": initial_deposit,
             },
         )
 
@@ -698,7 +876,6 @@ async def open_account(
         )
 
         if account_fee > 0:
-
             await session.execute(
                 text(
                     """
@@ -721,18 +898,39 @@ async def open_account(
                     """
                 ),
                 {
-                    "character_id": int(
-                        character_id
-                    ),
+                    "character_id": int(character_id),
                     "amount": -account_fee,
                     "balance_after": new_balance,
-                    "description": (
-                        f"Frais d'ouverture "
-                        f"{bank['name']}"
-                    ),
-                    "reference": (
-                        f"bank_account:{account['id']}"
-                    ),
+                    "description": f"Frais d'ouverture {bank['name']}",
+                    "reference": f"bank_account:{account['id']}",
+                },
+            )
+
+        if initial_deposit > 0:
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO life_bank_transactions (
+                        account_id,
+                        transaction_type,
+                        amount,
+                        balance_after,
+                        description
+                    )
+                    VALUES (
+                        :account_id,
+                        'initial_deposit',
+                        :amount,
+                        :balance_after,
+                        :description
+                    )
+                    """
+                ),
+                {
+                    "account_id": int(account["id"]),
+                    "amount": initial_deposit,
+                    "balance_after": initial_deposit,
+                    "description": f"Dépôt initial {bank['name']}",
                 },
             )
 
@@ -748,7 +946,9 @@ async def open_account(
             f"🏦 Banque : **{bank['name']}**\n"
             f"🔢 Compte : `{account_number}`\n"
             f"💰 Solde : "
-            f"{format_money(0)} FCFA\n"
+            f"{format_money(initial_deposit)} FCFA\n"
+            f"💳 Carte : "
+            f"{bank.get('card_name') or 'Aucune'}\n"
             f"📈 Intérêt : "
             f"{bank['interest_rate']} %"
         ),
