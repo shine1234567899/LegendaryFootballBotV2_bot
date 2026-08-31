@@ -611,7 +611,7 @@ async def housing_callback(
             )
             await session.commit()
 
-        result = rent_housing(username, "room")
+        result = await rent_housing(int(actor["id"]), "room", country=actor.get("residence_country",""), city=actor.get("residence_city",""))
 
         if not result.get("success"):
             # Roll back the debit if the housing record could not be created.
@@ -738,12 +738,9 @@ async def housing_callback(
             or ""
         ).strip()
 
-        from life_world.systems.housing_system import (
-            get_rent_due,
-            pay_rent,
-        )
+        from life_world.systems.housing_system import get_rent_due
 
-        due = int(get_rent_due(username) or 0)
+        due = int(get_rent_due(int(actor["id"])) or 0)
 
         if due > 0:
             async with AsyncSessionLocal() as session:
@@ -792,10 +789,26 @@ async def housing_callback(
                 )
                 await session.commit()
 
-        result = pay_rent(
-            username,
-            int(actor.get("balance") or 0),
-        )
+        from life_world.systems.housing_system import get_current_housing
+
+        current = await get_current_housing(int(actor["id"]))
+        if current is None:
+            result = {"success": False, "message": "❌ Aucun logement actif."}
+        else:
+            async with AsyncSessionLocal() as session:
+                await session.execute(
+                    text("""
+                        UPDATE mwl_housing
+                        SET last_rent_paid_at=NOW()
+                        WHERE character_id=:id
+                    """),
+                    {"id": int(actor["id"])},
+                )
+                await session.commit()
+            result = {
+                "success": True,
+                "message": f"✅ Loyer payé : {due:,} FCFA".replace(",", " "),
+            }
 
         await query.edit_message_text(
             result.get(

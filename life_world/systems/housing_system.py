@@ -99,3 +99,54 @@ async def calculate_days_since_payment(character_id:int)->int:
     return max(0,(now-last).days)
 
 async def calculate_rent_charge(character_id:int)->int:return await get_rent_due(character_id)
+
+
+def housing_catalog() -> dict:
+    return HOUSING_TYPES
+
+def format_housing_catalog() -> str:
+    lines = ["🏠 **CATALOGUE DES LOGEMENTS**","━━━━━━━━━━━━━━━━━━━━",""]
+    for key,h in HOUSING_TYPES.items():
+        rent=f"{h['rent_daily']:,} FCFA/jour".replace(","," ")
+        price = "non disponible" if h["purchase_price"] is None else f"{int(h['purchase_price']):,} FCFA".replace(","," ")
+        lines += [f"{h['name']}",f"💸 Location : {rent}",f"🏷️ Achat : {price}",""]
+    return "\n".join(lines)
+
+def housing_catalog_buttons() -> list[list[tuple[str,str]]]:
+    rows=[]
+    for key,h in HOUSING_TYPES.items():
+        rows.append([(f"lw_housing:details:{key}",h["name"])])
+    return rows
+
+def housing_action_buttons(housing_type:str) -> list[list[tuple[str,str]]]:
+    h=HOUSING_TYPES.get(housing_type,{})
+    rows=[[("lw_housing:roompay:yes" if housing_type=="room" else f"lw_housing:rent:{housing_type}",
+           f"💰 Louer ({int(h.get('rent_daily',0)):,} FCFA/jour)".replace(","," "))]]
+    if h.get("purchase_price"):
+        rows.append([(f"lw_housing:buy:{housing_type}",f"🏷️ Acheter ({int(h['purchase_price']):,} FCFA)".replace(","," "))])
+    return rows
+
+def current_housing_buttons() -> list[list[tuple[str,str]]]:
+    return [
+        [("lw_housing:current","🏠 Mon logement")],
+        [("lw_housing:catalog","🏘️ Catalogue")],
+    ]
+
+def format_current_housing(housing:dict|None) -> str:
+    if not housing:
+        return "🏠 **MON LOGEMENT**\n\nTu n'as actuellement aucun logement."
+    h=HOUSING_TYPES.get(housing.get("home_type"),{})
+    name=h.get("name",housing.get("home_type","Logement"))
+    ownership="Propriétaire" if housing.get("ownership")=="owned" else "Locataire"
+    return (
+        "🏠 **MON LOGEMENT**\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"{name}\n"
+        f"📌 Statut : **{ownership}**\n"
+        f"💸 Loyer : **{int(housing.get('rent_daily') or 0):,} FCFA/jour**\n"
+        f"📍 {housing.get('city') or 'Ville non définie'}, {housing.get('country') or 'Pays non défini'}"
+    ).replace(","," ")
+
+def parse_housing_callback(data:str) -> tuple[str,str|None]:
+    parts=str(data or "").split(":")
+    return (parts[1],parts[2] if len(parts)>2 else None)
